@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>コスめぐり — レイヤーの一日エージェント</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#141220">
+<link rel="stylesheet" href="/static/style.css?v=3">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark">◈</span>
+    <h1>コスめぐり</h1>
+  </div>
+  <div class="top-right">
+    <div class="lang-switch">
+      <button class="lang active" data-lang="ja">日本語</button>
+      <button class="lang" data-lang="en">English</button>
+    </div>
+    <button id="btn-bell" class="bell hidden" title="お知らせ">
+      <span>🔔</span><span id="bell-count" class="badge hidden">0</span>
+    </button>
+    <button id="btn-logout" class="ghost hidden">ログアウト</button>
+  </div>
+</header>
+
+<!-- ログイン -->
+<section id="view-login" class="login">
+  <div class="card login-card">
+    <h2>コス名ではじめる</h2>
+    <p class="note">本名も素顔も預かりません。アカウントはコス名だけで成立します。</p>
+    <div id="auth-warning" class="msg alert hidden"></div>
+
+    <div id="login-firebase" class="hidden">
+      <div class="grid">
+        <label>メールアドレス<input id="fb-email" type="email" autocomplete="username"></label>
+        <label>パスワード<input id="fb-password" type="password" autocomplete="current-password"></label>
+        <label>コス名<input id="fb-handle" maxlength="40" placeholder="レイヤーA"></label>
+      </div>
+      <p class="note">メールアドレスは Firebase Authentication 側にのみ保管され、コスめぐりのデータには保存しません。</p>
+      <div class="actions">
+        <button id="btn-fb-login" class="primary">ログイン</button>
+        <button id="btn-fb-signup">新規登録</button>
+      </div>
+    </div>
+
+    <div id="login-dev">
+      <div class="grid">
+        <label>コス名<input id="dev-handle" value="レイヤーA" maxlength="40"></label>
+      </div>
+      <div class="actions">
+        <button id="btn-dev-login" class="primary">はじめる</button>
+      </div>
+    </div>
+
+    <div id="login-error" class="out"></div>
+  </div>
+</section>
+
+<!-- 本体 -->
+<main id="view-app" class="hidden">
+  <!-- チャット -->
+  <section class="card chat-card">
+    <h2><span class="step-no">1</span>エージェントに相談する</h2>
+    <p class="note">イベント・日付・作品/キャラ・出発駅・荷物が揃うと、一日ぶんを組み立てます。</p>
+    <div id="chat-log" class="chat-log"></div>
+    <div id="chat-slots" class="slots"></div>
+    <form id="chat-form" class="chat-input">
+      <input id="chat-text" placeholder="例: 9/6のコミケに横浜駅から行きます。大荷物です" autocomplete="off">
+      <button class="primary" type="submit">送信</button>
+      <button id="btn-chat-reset" type="button" class="ghost">やり直す</button>
+    </form>
+  </section>
+
+  <!-- 結果 -->
+  <section class="card hidden" id="sec-result">
+    <h2><span class="step-no">2</span>当日の組み立て</h2>
+    <div class="tabs">
+      <button class="tab active" data-tab="makeup">メイク工程</button>
+      <button class="tab" data-tab="route">動線</button>
+      <button class="tab" data-tab="dressing">更衣室</button>
+      <button class="tab" data-tab="fitting">試着</button>
+      <button class="tab" data-tab="look">完成イメージ</button>
+      <button class="tab" data-tab="voice">音声ガイド</button>
+    </div>
+    <div id="pane-makeup" class="pane"></div>
+    <div id="pane-route" class="pane hidden"></div>
+    <div id="pane-dressing" class="pane hidden"></div>
+    <div id="pane-fitting" class="pane hidden"></div>
+    <div id="pane-look" class="pane hidden">
+      <p class="note">ウィッグ×衣装×メイクの完成予想図を生成します（GMI Cloud）。製作・購入の前に方向性を確かめるためのものです。</p>
+      <div class="grid">
+        <label>要望（任意）<input id="look-note" placeholder="例: 全身、明るい照明で"></label>
+      </div>
+      <div class="actions">
+        <button id="btn-look" class="primary">完成イメージを生成</button>
+      </div>
+      <div id="look-out" class="out"></div>
+    </div>
+    <div id="pane-voice" class="pane hidden">
+      <p class="note">移動中とメイク中は画面を見られません。工程と動線を母語で読み上げます（GMI Cloud）。ボイスクローンは使いません。</p>
+      <div class="actions">
+        <button id="btn-voice-makeup" class="primary">メイク工程を読み上げ</button>
+        <button id="btn-voice-route">動線を読み上げ</button>
+      </div>
+      <div id="voice-out" class="out"></div>
+    </div>
+  </section>
+
+  <!-- 当日モード -->
+  <section class="card hidden" id="sec-dayof">
+    <h2><span class="step-no">3</span>当日モード（自律進行）</h2>
+    <p class="note">遅延の再計算と撤収アラートは Cloud Scheduler から定期起動し、結果はお知らせ欄に届きます。ここでは時刻を進めて再現します。</p>
+    <div class="actions">
+      <button id="btn-dayof">いまの状況を確認</button>
+      <button id="btn-dayof-teardown">撤収アラート時刻まで進める</button>
+    </div>
+    <div id="dayof-out" class="out"></div>
+  </section>
+
+  <!-- 顔解析 -->
+  <section class="card" id="sec-face">
+    <h2><span class="step-no">4</span>顔を解析する</h2>
+    <p class="note">肌タイプと顔属性の数値だけを保存し、画像は解析後すぐに破棄します。</p>
+    <div class="actions">
+      <button id="btn-face">解析する（画像は即破棄）</button>
+    </div>
+    <div id="face-out" class="out"></div>
+  </section>
+
+  <!-- 合わせ -->
+  <section class="card" id="sec-awase">
+    <h2><span class="step-no">5</span>合わせ（幹事業務）</h2>
+    <p class="note">到着監視とリスケの<strong>起案までが自律</strong>。枠の確定は主催者の承認を通します。</p>
+    <div class="actions">
+      <button id="btn-awase" class="primary">合わせを作って撮影枠を置く</button>
+      <button id="btn-late" disabled>メンバーの到着が遅れる</button>
+      <button id="btn-monitor" disabled>到着監視を走らせる</button>
+      <button id="btn-after-movie" disabled>アフタームービーを作る</button>
+    </div>
+    <div id="awase-out" class="out"></div>
+  </section>
+
+  <!-- 監査 -->
+  <section class="card" id="sec-audit">
+    <h2><span class="step-no">6</span>監査ログ</h2>
+    <p class="note">画像の破棄・位置共有の有効期間・リスケ承認は、すべて証跡が残ります。</p>
+    <div class="actions">
+      <button id="btn-audit">監査ログを見る</button>
+      <button id="btn-purge">TTL削除を実行（イベント終了+24h）</button>
+    </div>
+    <div id="audit-out" class="out"></div>
+  </section>
+</main>
+
+<!-- お知らせ -->
+<aside id="inbox" class="inbox hidden">
+  <div class="inbox-head">
+    <h3>お知らせ</h3>
+    <div>
+      <button id="btn-read-all" class="ghost">すべて既読</button>
+      <button id="btn-inbox-close" class="ghost">閉じる</button>
+    </div>
+  </div>
+  <div id="inbox-list" class="inbox-list"></div>
+</aside>
+
+<footer>
+  <p>顔画像は解析後に破棄。位置共有はイベント当日限定で、終了24時間後に自動削除されます。</p>
+  <p id="providers" class="providers"></p>
+</footer>
+
+<script src="/static/app.js?v=3"></script>
+</body>
+</html>

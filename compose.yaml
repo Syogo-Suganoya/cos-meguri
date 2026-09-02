@@ -1,0 +1,103 @@
+services:
+  api:
+    build: .
+    ports:
+      # 8080 が埋まっている環境では HOST_PORT=8081 のように上書きする
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      APP_ENV: local
+      # モック / 実API の差し替えスイッチ（キーが無ければ自動で mock に落ちる）
+      VTO_MODE: ${VTO_MODE:-mock}                 # mock | live (YouCam)
+      TRANSIT_MODE: ${TRANSIT_MODE:-mock}         # mock | live (駅すぱあと MCP)
+      LLM_MODE: ${LLM_MODE:-mock}                 # mock | live (Gemini)
+      MEDIA_MODE: ${MEDIA_MODE:-mock}             # mock | live (GMI Cloud)
+      REPOSITORY: ${REPOSITORY:-firestore}        # firestore | memory（memory はテスト専用）
+      # 認証。dev はパスワード検証なしのローカル専用
+      AUTH_MODE: ${AUTH_MODE:-dev}                # dev | firebase
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+      DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-cos-meguri-local-development-secret-key-0001}
+      # Cloud Scheduler から叩くバッチ用エンドポイントの共有シークレット。
+      # 未設定でもローカルは通るが、本番では設定しないとバッチが閉じる
+      TASKS_TOKEN: ${TASKS_TOKEN:-}
+      # 実APIに差し替えるときだけ設定する
+      YOUCAM_API_KEY: ${YOUCAM_API_KEY:-}
+      YOUCAM_SECRET_KEY: ${YOUCAM_SECRET_KEY:-}
+      EKISPERT_API_KEY: ${EKISPERT_API_KEY:-}
+      EKISPERT_MCP_URL: ${EKISPERT_MCP_URL:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
+      GMI_API_KEY: ${GMI_API_KEY:-}
+      GMI_IMAGE_MODEL: ${GMI_IMAGE_MODEL:-seedream-5-0-pro}
+      GMI_VIDEO_MODEL: ${GMI_VIDEO_MODEL:-Kling-Image2Video-V2.1-Pro}
+      GMI_SPEECH_MODEL: ${GMI_SPEECH_MODEL:-minimax-tts-speech-2.8-hd}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-cos-meguri-local}
+      # ローカルは常にエミュレータを見る。本番では未設定にして実 Firestore に繋ぐ
+      FIRESTORE_EMULATOR_HOST: ${FIRESTORE_EMULATOR_HOST:-firestore:8200}
+    volumes:
+      - ./app:/app/app
+      - ./web:/app/web
+      - ./tests:/app/tests
+    depends_on:
+      firestore:
+        condition: service_healthy
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --reload"
+
+  # テスト実行用: docker compose --profile test run --rm test
+  # テストはインメモリで回す。1件ずつ独立させたいのと、速さのため
+  test:
+    build: .
+    profiles: ["test"]
+    environment:
+      APP_ENV: test
+      REPOSITORY: memory
+    volumes:
+      - ./app:/app/app
+      - ./web:/app/web
+      - ./tests:/app/tests
+    command: pytest -q
+
+  # Firestore アダプタの結合テスト: docker compose --profile itest run --rm test-firestore
+  # エミュレータに実際に読み書きする。アダプタを触ったら必ず通すこと
+  test-firestore:
+    build: .
+    profiles: ["itest"]
+    environment:
+      APP_ENV: test
+      REPOSITORY: firestore
+      GOOGLE_CLOUD_PROJECT: cos-meguri-local
+      FIRESTORE_EMULATOR_HOST: firestore:8200
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+    depends_on:
+      firestore:
+        condition: service_healthy
+    command: pytest -q tests/test_firestore.py
+
+  # アーキテクチャ図の生成: docker compose --profile docs run --rm diagram
+  diagram:
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+    profiles: ["docs"]
+    volumes:
+      - ./docs:/work/docs
+
+  # データの保存先。api と一緒に立ち上がる
+  firestore:
+    image: google/cloud-sdk:emulators
+    command: >
+      gcloud emulators firestore start
+      --host-port=0.0.0.0:8200
+      --project=cos-meguri-local
+    ports:
+      - "${FIRESTORE_PORT:-8210}:8200"
+    healthcheck:
+      # 起動前に api が繋ぎにいくと初回リクエストが落ちるので、待ってから上げる
+      test: ["CMD", "curl", "-f", "http://localhost:8200/"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s

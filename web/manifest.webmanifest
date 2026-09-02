@@ -1,0 +1,19 @@
+{
+  "name": "コスめぐり — レイヤーの一日エージェント",
+  "short_name": "コスめぐり",
+  "description": "遠征の試着・メイク手順・大荷物動線・更衣室混雑・合わせ管理を一つに束ねるエージェント",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f0d18",
+  "theme_color": "#141220",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

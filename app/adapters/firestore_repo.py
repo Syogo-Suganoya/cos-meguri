@@ -1,0 +1,241 @@
+"""Firestore 実装（設計書 §6 のコレクション構成）。既定のデータ保存先。
+
+google-cloud-firestore の同期クライアントをスレッドに逃がして使う。
+位置共有の失効は「値を消す」必要があるため、Firestore のTTLポリシーではなく
+purge_expired() で明示的に落とす（設計書 §7-3）。
+
+**クエリは単一フィールドの等値だけに絞っている。** 複合条件は Firestore で
+複合インデックスの作成を要求され、デプロイ手順に増える。件数が小さいうちは
+1条件で引いて残りを Python 側で絞るほうが、運用の手数が少ない。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from datetime import datetime
+
+from google.cloud import firestore
+
+from app.domain import awase as awase_domain
+from app.domain.models import (
+    AuditAction,
+    AuditLog,
+    Awase,
+    ChatSession,
+    Expedition,
+    ExpeditionStatus,
+    Layer,
+    Notification,
+    utcnow,
+)
+from app.ports.repository import RepositoryPort
+
+COL_LAYERS = "layers"
+COL_EXPEDITIONS = "expeditions"
+COL_AWASE = "awase"
+COL_NOTIFICATIONS = "notifications"
+COL_CHATS = "chats"
+COL_AUDIT = "audit"
+
+
+class FirestoreRepository(RepositoryPort):
+    name = "repository:firestore"
+
+    def __init__(self, project: str) -> None:
+        self._db = firestore.Client(project=project)
+
+    async def _run(self, fn, *args):
+        return await asyncio.to_thread(fn, *args)
+
+    def _set(self, collection: str, doc_id: str, data: dict) -> None:
+        self._db.collection(collection).document(doc_id).set(data)
+
+    def _get(self, collection: str, doc_id: str) -> dict | None:
+        snap = self._db.collection(collection).document(doc_id).get()
+        return snap.to_dict() if snap.exists else None
+
+    # -- layers ---------------------------------------------------------
+    async def save_layer(self, layer: Layer) -> Layer:
+        await self._run(self._set, COL_LAYERS, layer.layer_id, layer.model_dump(mode="json"))
+        return layer
+
+    async def get_layer(self, layer_id: str) -> Layer | None:
+        data = await self._run(self._get, COL_LAYERS, layer_id)
+        return Layer.model_validate(data) if data else None
+
+    async def get_layer_by_uid(self, auth_uid: str) -> Layer | None:
+        return await self._find_layer("auth_uid", auth_uid)
+
+    async def find_layer_by_handle(self, handle: str) -> Layer | None:
+        return await self._find_layer("handle", handle)
+
+    async def _find_layer(self, field: str, value: str) -> Layer | None:
+        def query() -> dict | None:
+            docs = (
+                self._db.collection(COL_LAYERS)
+                .where(filter=firestore.FieldFilter(field, "==", value))
+                .limit(1)
+                .stream()
+            )
+            for doc in docs:
+                return doc.to_dict()
+            return None
+
+        data = await self._run(query)
+        return Layer.model_validate(data) if data else None
+
+    # -- expeditions ----------------------------------------------------
+    async def save_expedition(self, exp: Expedition) -> Expedition:
+        exp.updated_at = utcnow()
+        await self._run(self._set, COL_EXPEDITIONS, exp.exp_id, exp.model_dump(mode="json"))
+        return exp
+
+    async def get_expedition(self, exp_id: str) -> Expedition | None:
+        data = await self._run(self._get, COL_EXPEDITIONS, exp_id)
+        return Expedition.model_validate(data) if data else None
+
+    async def list_expeditions(self, layer_id: str) -> list[Expedition]:
+        def query() -> list[dict]:
+            docs = (
+                self._db.collection(COL_EXPEDITIONS)
+                .where(filter=firestore.FieldFilter("layer_id", "==", layer_id))
+                .stream()
+            )
+            return [d.to_dict() for d in docs]
+
+        return [Expedition.model_validate(d) for d in await self._run(query)]
+
+    async def list_expeditions_on(self, event_date: str) -> list[Expedition]:
+        def query() -> list[dict]:
+            docs = (
+                self._db.collection(COL_EXPEDITIONS)
+                .where(filter=firestore.FieldFilter("event_date", "==", event_date))
+                .stream()
+            )
+            return [d.to_dict() for d in docs]
+
+        # 終了済みの除外は Python 側で行う（複合インデックスを増やさない）
+        return [
+            exp
+            for exp in (Expedition.model_validate(d) for d in await self._run(query))
+            if exp.status is not ExpeditionStatus.DONE
+        ]
+
+    # -- awase ----------------------------------------------------------
+    async def save_awase(self, awase: Awase) -> Awase:
+        await self._run(self._set, COL_AWASE, awase.awase_id, awase.model_dump(mode="json"))
+        return awase
+
+    async def get_awase(self, awase_id: str) -> Awase | None:
+        data = await self._run(self._get, COL_AWASE, awase_id)
+        return Awase.model_validate(data) if data else None
+
+    async def list_awase(self) -> list[Awase]:
+        def query() -> list[dict]:
+            return [d.to_dict() for d in self._db.collection(COL_AWASE).stream()]
+
+        return [Awase.model_validate(d) for d in await self._run(query)]
+
+    # -- notifications ---------------------------------------------------
+    async def save_notification(self, notification: Notification) -> Notification:
+        await self._run(
+            self._set,
+            COL_NOTIFICATIONS,
+            notification.notification_id,
+            notification.model_dump(mode="json"),
+        )
+        return notification
+
+    async def list_notifications(
+        self, layer_id: str, *, unread_only: bool = False
+    ) -> list[Notification]:
+        def query() -> list[dict]:
+            docs = (
+                self._db.collection(COL_NOTIFICATIONS)
+                .where(filter=firestore.FieldFilter("layer_id", "==", layer_id))
+                .stream()
+            )
+            return [d.to_dict() for d in docs]
+
+        items = [Notification.model_validate(d) for d in await self._run(query)]
+        if unread_only:
+            items = [n for n in items if not n.read]
+        return sorted(items, key=lambda n: n.created_at, reverse=True)
+
+    async def mark_notifications_read(self, layer_id: str, ids: list[str]) -> int:
+        def update() -> int:
+            count = 0
+            for notification_id in ids:
+                ref = self._db.collection(COL_NOTIFICATIONS).document(notification_id)
+                snap = ref.get()
+                data = snap.to_dict() if snap.exists else None
+                # 他人の通知を既読にできないよう、宛先を確認してから更新する
+                if not data or data.get("layer_id") != layer_id or data.get("read"):
+                    continue
+                ref.update({"read": True})
+                count += 1
+            return count
+
+        return await self._run(update)
+
+    # -- chat ------------------------------------------------------------
+    async def save_chat(self, session: ChatSession) -> ChatSession:
+        session.updated_at = utcnow()
+        await self._run(self._set, COL_CHATS, session.layer_id, session.model_dump(mode="json"))
+        return session
+
+    async def get_chat(self, layer_id: str) -> ChatSession | None:
+        data = await self._run(self._get, COL_CHATS, layer_id)
+        return ChatSession.model_validate(data) if data else None
+
+    # -- audit ----------------------------------------------------------
+    async def append_audit(self, log: AuditLog) -> AuditLog:
+        await self._run(self._set, COL_AUDIT, log.log_id, log.model_dump(mode="json"))
+        return log
+
+    async def list_audit(self, *, subject_id: str | None = None) -> list[AuditLog]:
+        def query() -> list[dict]:
+            col = self._db.collection(COL_AUDIT)
+            if subject_id:
+                col = col.where(filter=firestore.FieldFilter("subject_id", "==", subject_id))
+            return [d.to_dict() for d in col.stream()]
+
+        return [AuditLog.model_validate(d) for d in await self._run(query)]
+
+    # -- TTL ------------------------------------------------------------
+    async def purge_expired(self, *, now: datetime | None = None) -> list[str]:
+        now = now or utcnow()
+        purged: list[str] = []
+        for stored in await self.list_awase():
+            cleaned, purged_members = awase_domain.purge_expired_locations(stored, now=now)
+            changed = bool(purged_members)
+
+            if awase_domain.should_purge(cleaned, now=now):
+                cleaned.members = []
+                cleaned.proposals = []
+                changed = True
+                await self.append_audit(
+                    AuditLog(
+                        log_id=f"log_{uuid.uuid4().hex[:8]}",
+                        actor="scheduler",
+                        action=AuditAction.EXPEDITION_PURGED,
+                        subject_id=cleaned.awase_id,
+                        payload={"reason": "ttl", "ttl_at": cleaned.ttl_at.isoformat()},
+                    )
+                )
+            elif purged_members:
+                await self.append_audit(
+                    AuditLog(
+                        log_id=f"log_{uuid.uuid4().hex[:8]}",
+                        actor="scheduler",
+                        action=AuditAction.LOCATION_SHARE_PURGED,
+                        subject_id=cleaned.awase_id,
+                        payload={"members": purged_members},
+                    )
+                )
+
+            if changed:
+                await self.save_awase(cleaned)
+                purged.append(cleaned.awase_id)
+        return purged
