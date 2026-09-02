@@ -2,6 +2,7 @@
 
 コスめぐりを Cloud Run に載せる手順。**CLI（gcloud）** と **画面操作（Google Cloud コンソール）** の
 2通りを併記する。どちらでも結果は同じなので、片方だけ実行すればよい。
+初回のあと自動化したい場合は **パターンC: GitHub Actions（CD）**（現在オフ）を使う。
 
 開発環境の作り方は [CONTRIBUTING.md](CONTRIBUTING.md)、設計の背景は [設計書.md](設計書.md) を参照。
 
@@ -320,6 +321,91 @@ URL `https://SERVICE_URL/api/tasks/purge` として作る（ヘッダーは同�
 1. **Cloud Run → cos-meguri** のページ上部に出ている URL を開く
 2. 末尾に `/healthz` を付けて、`providers` が期待どおりか確認する
 3. **ログ** タブで起動時の警告（`... が未設定のため mock で起動します`）が出ていないか見る
+
+---
+
+# パターンC: GitHub Actions（CD）
+
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) に、テスト → デプロイ →
+`/healthz` 確認までを通す CD を置いてある。やっていることはパターンAの手順5と同じで、
+**手順0〜4（API有効化・Firestore・サービスアカウント・シークレット・Firebase Auth）は
+先に済ませておく必要がある**。
+
+> [!NOTE]
+> **この CD は現在オフにしてある。** push トリガーはコメントアウト済みで、
+> `deploy` ジョブも変数 `CD_ENABLED` が `true` のときだけ動く。
+> 今の状態で走らせても、テストだけ通って `deploy` はスキップされる。
+
+## 何をするワークフローか
+
+| ジョブ | 内容 |
+|---|---|
+| `test` | `compose --profile test`（インメモリ）と `--profile itest`（Firestore エミュレータ）を実行。APIキーは要らない |
+| `deploy` | Workload Identity 連携で認証し、`--source .` で Cloud Run にデプロイ。環境変数とシークレット参照は手順5と同じ |
+| 最後のステップ | 新リビジョンの `/healthz` を叩き、`auth:firebase` でなければ失敗させる |
+
+サービスアカウントキーの JSON は保存しない。GitHub の OIDC トークンを
+Workload Identity プールで短命の資格情報に交換する。
+
+## 有効化するとき
+
+**1. Workload Identity 連携を作る**
+
+```bash
+gcloud iam workload-identity-pools create github \
+  --location=global --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc github \
+  --location=global --workload-identity-pool=github \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository == 'Syogo-Suganoya/cos-meguri'"
+```
+
+`--attribute-condition` を省略しないこと。省くと**任意のリポジトリ**がこのプールで
+資格情報を取得できてしまう。
+
+**2. デプロイ用サービスアカウントを作り、リポジトリだけに借用を許す**
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe cos-meguri --format='value(projectNumber)')
+
+gcloud iam service-accounts create cos-meguri-deployer
+
+for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/artifactregistry.writer roles/storage.admin roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding cos-meguri \
+    --member="serviceAccount:cos-meguri-deployer@cos-meguri.iam.gserviceaccount.com" \
+    --role="$ROLE"
+done
+
+gcloud iam service-accounts add-iam-policy-binding \
+  cos-meguri-deployer@cos-meguri.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/Syogo-Suganoya/cos-meguri"
+```
+
+`roles/iam.serviceAccountUser` は、実行用の `cos-meguri-run` を Cloud Run に
+割り当てるために要る。これが無いとデプロイだけ通って権限エラーになる。
+
+**3. GitHub 側に値を入れる**（Settings → Secrets and variables → Actions）
+
+| 種別 | 名前 | 値 |
+|---|---|---|
+| Secret | `WIF_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github` |
+| Secret | `WIF_SERVICE_ACCOUNT` | `cos-meguri-deployer@cos-meguri.iam.gserviceaccount.com` |
+| Variable | `FIREBASE_WEB_API_KEY` | 手順4で控えた apiKey（公開前提の値なので Variable でよい） |
+| Variable | `EKISPERT_MCP_URL` | MCPサーバーのURL |
+| Variable | `CD_ENABLED` | `true` ← **これを入れるまでデプロイは走らない** |
+
+**4. トリガーを開ける**
+
+`deploy.yml` の `push:` ブロックのコメントを外す。main への push（`*.md` と `docs/` を除く）で
+デプロイが走るようになる。
+
+## 止めかた
+
+`CD_ENABLED` を消すか `false` にすれば、ワークフローは走ってもデプロイはスキップされる。
+完全に止めるなら GitHub の **Actions タブ → 該当ワークフロー → Disable workflow**。
 
 ---
 

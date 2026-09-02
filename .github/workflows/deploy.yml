@@ -1,0 +1,118 @@
+# Cloud Run への継続デプロイ（CD）
+#
+# ★ 現在このCDは停止している ★
+#   1. push トリガーをコメントアウトしてある（自動デプロイは起きない）
+#   2. deploy ジョブは Variables の CD_ENABLED が "true" のときだけ動く
+#
+# 有効化の手順は DEPLOY.md「パターンC: GitHub Actions（CD）」を参照。
+# 手順は DEPLOY.md のパターンA/Bと同じことを CI から行うだけで、
+# 前提（Firestore・Secret Manager・Firebase Auth の作成）は済んでいる必要がある。
+
+name: Deploy to Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "手動デプロイの理由（実行履歴に残す）"
+        required: false
+        default: "manual"
+  # --- CD を有効にするときにこのブロックのコメントを外す ---
+  # push:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - "**.md"
+  #     - "docs/**"
+
+# 同じブランチのデプロイが重なったら古い方を捨てる。
+# Cloud Run のリビジョンが競合して順序が入れ替わるのを防ぐ。
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: cos-meguri
+  REGION: asia-northeast1
+  SERVICE: cos-meguri
+  RUN_SERVICE_ACCOUNT: cos-meguri-run@cos-meguri.iam.gserviceaccount.com
+
+jobs:
+  # デプロイ前に必ずテストを通す。ローカルと同じ compose のテストプロファイルを使う
+  # （インメモリ・APIキー不要なので、CI に秘密情報を渡さずに回せる）。
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: pytest（インメモリ）
+        run: docker compose --profile test run --rm test
+      - name: Firestore アダプタの結合テスト（エミュレータ）
+        run: docker compose --profile itest run --rm test-firestore
+      - name: 後片付け
+        if: always()
+        run: docker compose --profile test --profile itest down -v
+
+  deploy:
+    needs: test
+    # CD のスイッチ。Variables に CD_ENABLED=true を入れるまでスキップされる
+    if: vars.CD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Workload Identity 連携の OIDC トークン取得に必要
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # サービスアカウントキーの JSON は置かない。GitHub の OIDC トークンを
+      # Workload Identity プールで交換して、短命の資格情報だけを使う。
+      - name: Google Cloud 認証
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Cloud Run にデプロイ
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          source: .
+          # 値の意味は DEPLOY.md 手順5の「ポイント」を参照。
+          # AUTH_MODE=firebase と REPOSITORY=firestore は落とさないこと
+          env_vars: |
+            APP_ENV=production
+            AUTH_MODE=firebase
+            REPOSITORY=firestore
+            VTO_MODE=live
+            TRANSIT_MODE=live
+            LLM_MODE=live
+            MEDIA_MODE=live
+            GOOGLE_CLOUD_PROJECT=cos-meguri
+            FIREBASE_PROJECT_ID=cos-meguri
+            FIREBASE_WEB_API_KEY=${{ vars.FIREBASE_WEB_API_KEY }}
+            GEMINI_MODEL=gemini-3.7-flash
+            EKISPERT_MCP_URL=${{ vars.EKISPERT_MCP_URL }}
+          secrets: |
+            GOOGLE_API_KEY=GOOGLE_API_KEY:latest
+            YOUCAM_API_KEY=YOUCAM_API_KEY:latest
+            YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest
+            EKISPERT_API_KEY=EKISPERT_API_KEY:latest
+            GMI_API_KEY=GMI_API_KEY:latest
+            TASKS_TOKEN=TASKS_TOKEN:latest
+          flags: >-
+            --allow-unauthenticated
+            --service-account=${{ env.RUN_SERVICE_ACCOUNT }}
+
+      # 新リビジョンが実際に起動して、意図したプロバイダで立ち上がったかを見る。
+      # auth が auth:dev のままなら Firebase 設定が入っていないので失敗させる。
+      - name: /healthz で確認
+        run: |
+          set -euo pipefail
+          URL="${{ steps.deploy.outputs.url }}"
+          BODY=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$URL/healthz")
+          echo "$BODY"
+          echo "$BODY" | grep -q '"auth":"auth:firebase"' \
+            || { echo "::error::AUTH_MODE が firebase になっていない"; exit 1; }
+          echo "### デプロイ完了: $URL" >> "$GITHUB_STEP_SUMMARY"
