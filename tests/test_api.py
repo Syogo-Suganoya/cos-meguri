@@ -381,24 +381,3 @@ def test_outsider_cannot_read_an_awase(user, login):
     ).json()
     stranger = login("部外者")
     assert stranger.get(f"/api/awase/{awase['awase_id']}").status_code == 403
-
-
-def test_purge_endpoint_clears_location_after_ttl(client, user):
-    awase = user.post(
-        "/api/awase",
-        json={"title": "TTLテスト", "event_id": "acosta", "day": DAY.isoformat()},
-    ).json()
-    user.post(
-        f"/api/awase/{awase['awase_id']}/progress",
-        json={"progress": "arrived", "share_location": True},
-    )
-
-    ttl_at = _dt(awase["ttl_at"])
-    res = client.post(
-        "/api/tasks/purge", params={"now": (ttl_at + timedelta(hours=1)).isoformat()}
-    )
-    assert res.json()["count"] == 1
-
-    # メンバーごと消えるので、主催者からも空に見える
-    stored = user.get(f"/api/awase/{awase['awase_id']}")
-    assert stored.status_code == 403

@@ -1,8 +1,6 @@
 """Firestore 実装（設計書 §6 のコレクション構成）。既定のデータ保存先。
 
 google-cloud-firestore の同期クライアントをスレッドに逃がして使う。
-位置共有の失効は「値を消す」必要があるため、Firestore のTTLポリシーではなく
-purge_expired() で明示的に落とす（設計書 §7-3）。
 
 **クエリは単一フィールドの等値だけに絞っている。** 複合条件は Firestore で
 複合インデックスの作成を要求され、デプロイ手順に増える。件数が小さいうちは
@@ -106,22 +104,6 @@ class FirestoreRepository(RepositoryPort):
 
         return [Expedition.model_validate(d) for d in await self._run(query)]
 
-    async def list_expeditions_on(self, event_date: str) -> list[Expedition]:
-        def query() -> list[dict]:
-            docs = (
-                self._db.collection(COL_EXPEDITIONS)
-                .where(filter=firestore.FieldFilter("event_date", "==", event_date))
-                .stream()
-            )
-            return [d.to_dict() for d in docs]
-
-        # 終了済みの除外は Python 側で行う（複合インデックスを増やさない）
-        return [
-            exp
-            for exp in (Expedition.model_validate(d) for d in await self._run(query))
-            if exp.status is not ExpeditionStatus.DONE
-        ]
-
     # -- awase ----------------------------------------------------------
     async def save_awase(self, awase: Awase) -> Awase:
         await self._run(self._set, COL_AWASE, awase.awase_id, awase.model_dump(mode="json"))
@@ -214,42 +196,3 @@ class FirestoreRepository(RepositoryPort):
             logs = [log for log in logs if layer_id in log.layer_ids]
         return logs
 
-    # -- TTL ------------------------------------------------------------
-    async def purge_expired(self, *, now: datetime | None = None) -> list[str]:
-        now = now or utcnow()
-        purged: list[str] = []
-        for stored in await self.list_awase():
-            cleaned, purged_members = awase_domain.purge_expired_locations(stored, now=now)
-            changed = bool(purged_members)
-
-            if awase_domain.should_purge(cleaned, now=now):
-                owners = [m.layer_id for m in cleaned.members]  # 消す前に控える
-                cleaned.members = []
-                cleaned.proposals = []
-                changed = True
-                await self.append_audit(
-                    AuditLog(
-                        log_id=f"log_{uuid.uuid4().hex[:8]}",
-                        actor="scheduler",
-                        action=AuditAction.EXPEDITION_PURGED,
-                        subject_id=cleaned.awase_id,
-                        layer_ids=owners,
-                        payload={"reason": "ttl", "ttl_at": cleaned.ttl_at.isoformat()},
-                    )
-                )
-            elif purged_members:
-                await self.append_audit(
-                    AuditLog(
-                        log_id=f"log_{uuid.uuid4().hex[:8]}",
-                        actor="scheduler",
-                        action=AuditAction.LOCATION_SHARE_PURGED,
-                        subject_id=cleaned.awase_id,
-                        layer_ids=list(purged_members),
-                        payload={"members": purged_members},
-                    )
-                )
-
-            if changed:
-                await self.save_awase(cleaned)
-                purged.append(cleaned.awase_id)
-        return purged

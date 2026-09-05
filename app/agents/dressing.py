@@ -62,7 +62,7 @@ class DressingAgent:
         ]
 
     def next_alert_at(self, plan: DressingPlan) -> datetime | None:
-        """Cloud Scheduler に積む次のアラート時刻。"""
+        """次のアラート時刻。当日モードを進めたときに、過ぎていれば知らせる。"""
         if plan.teardown_alert_at:
             return plan.teardown_alert_at
         if plan.recommended_exit:

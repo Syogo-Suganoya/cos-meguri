@@ -20,7 +20,6 @@ services:
       DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-cos-meguri-local-development-secret-key-0001}
       # Cloud Scheduler から叩くバッチ用エンドポイントの共有シークレット。
       # 未設定でもローカルは通るが、本番では設定しないとバッチが閉じる
-      TASKS_TOKEN: ${TASKS_TOKEN:-}
       # 実APIに差し替えるときだけ設定する
       YOUCAM_API_KEY: ${YOUCAM_API_KEY:-}
       YOUCAM_SECRET_KEY: ${YOUCAM_SECRET_KEY:-}

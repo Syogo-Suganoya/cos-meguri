@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>入る — コスめぐり</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b10">
+<link rel="stylesheet" href="/static/style.css?v=41">
+</head>
+<body class="p-login">
+
+<main>
+  <h1 class="page-title">入る</h1>
+  <p class="page-lead">コスめぐりはコス名だけで成立します。本名も素顔も預かりません。</p>
+
+  <div id="login-error" class="out"></div>
+
+  <!-- 開発用ログイン。コス名は端末ごとに自動でつけるので、押すだけ -->
+  <section class="card login-card" id="view-dev">
+    <h2>はじめる</h2>
+    <p class="note">コス名はこの端末用に自動でつけます。あとから <b>準備</b> のページで好きな名前に変えられます。</p>
+    <div class="actions">
+      <button id="btn-dev-login" class="primary">はじめる</button>
+    </div>
+  </section>
+
+  <!-- メールとパスワードで入る場合だけ出す（本番） -->
+  <section class="card login-card hidden" id="view-firebase">
+    <h2>メールで入る</h2>
+    <p class="note">メールアドレスは Firebase Authentication だけが持ちます。コスめぐりのデータには残しません。</p>
+    <div class="grid">
+      <label>メールアドレス<input id="fb-email" type="email" autocomplete="username"></label>
+      <label>パスワード<input id="fb-password" type="password" autocomplete="current-password"></label>
+      <label>コス名<input id="fb-handle" maxlength="40" placeholder="例: ミナト"></label>
+    </div>
+    <div class="actions">
+      <button id="btn-fb-login" class="primary">入る</button>
+      <button id="btn-fb-signup">はじめて使う</button>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/static/js/pages/login.js?v=41"></script>
+</body>
+</html>

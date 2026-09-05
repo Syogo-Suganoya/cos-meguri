@@ -1,13 +1,11 @@
 """永続化のポート（Firestore / インメモリ）。
 
 設計書 §6 のコレクション（layers / expeditions / awase / audit）に対応する。
-TTL削除は purge_expired() に集約し、Cloud Scheduler から叩けるようにする。
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
 
 from app.domain.models import (
     AuditLog,
@@ -47,13 +45,6 @@ class RepositoryPort(ABC):
     @abstractmethod
     async def list_expeditions(self, layer_id: str) -> list[Expedition]: ...
 
-    @abstractmethod
-    async def list_expeditions_on(self, event_date: str) -> list[Expedition]:
-        """開催日（JST の YYYY-MM-DD）で引く。当日モードのバッチが使う。
-
-        終了済み（DONE）は返さない。
-        """
-
     # -- awase ----------------------------------------------------------
     @abstractmethod
     async def save_awase(self, awase: Awase) -> Awase: ...
@@ -92,7 +83,3 @@ class RepositoryPort(ABC):
         self, *, subject_id: str | None = None, layer_id: str | None = None
     ) -> list[AuditLog]: ...
 
-    # -- TTL ------------------------------------------------------------
-    @abstractmethod
-    async def purge_expired(self, *, now: datetime | None = None) -> list[str]:
-        """TTL 到達分の位置・進捗を削除し、対象IDを返す（設計書 §7-3）。"""

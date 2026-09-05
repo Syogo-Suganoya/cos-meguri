@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import base64
 import binascii
-import secrets
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.adapters.dev_auth import DevAuth
 from app.agents.fitting import IpGuardBlocked
@@ -366,7 +365,7 @@ async def api_day_of(
     agents: AgentBundle = Depends(get_agents),
     layer: Layer = Depends(current_layer),
 ) -> dict:
-    """当日モードを1回進める。本番は Cloud Scheduler から定期起動する。"""
+    """当日モードを1回進める。定期実行は持たないので、押されたときだけ動く。"""
     exp = await agents.repository.get_expedition(exp_id)
     if exp is None:
         raise HTTPException(status_code=404, detail="expedition not found")
@@ -456,7 +455,6 @@ async def api_voice_guide(
 def _awase_payload(awase: Awase, agents: AgentBundle) -> dict:
     data = awase.model_dump(mode="json")
     data["summary"] = agents.awase.summary(awase)
-    data["ttl_at"] = awase.ttl_at.isoformat()
     return data
 
 
@@ -725,63 +723,3 @@ async def api_audit(
     )
     logs.sort(key=lambda log: log.created_at, reverse=True)
     return {"logs": [log.model_dump(mode="json") for log in logs]}
-
-
-# ---------------------------------------------------------------- スケジューラ
-
-
-def verify_tasks_token(x_tasks_token: str | None = Header(default=None)) -> None:
-    """Cloud Scheduler から叩くバッチ用エンドポイントの保護。
-
-    PWA を公開するためサービス全体が未認証許可になるので、Cloud Run の IAM では
-    守れない。共有シークレットをアプリ側で突き合わせる。
-    未設定のときはローカルだけ通し、それ以外は閉じる（開いたまま本番に出ない）。
-    """
-    settings = get_settings()
-    if not settings.tasks_token:
-        if settings.is_local:
-            return
-        raise HTTPException(
-            status_code=503,
-            detail="TASKS_TOKEN が未設定です。バッチ用エンドポイントは閉じています",
-        )
-    if not x_tasks_token or not secrets.compare_digest(
-        x_tasks_token, settings.tasks_token
-    ):
-        raise HTTPException(status_code=403, detail="X-Tasks-Token が一致しません")
-
-
-@router.post("/tasks/purge", dependencies=[Depends(verify_tasks_token)])
-async def api_purge(
-    now: datetime | None = Query(default=None),
-    agents: AgentBundle = Depends(get_agents),
-) -> dict:
-    """設計書 §7-3: 期限切れの位置・進捗を削除する。Cloud Scheduler から叩く。"""
-    purged = await agents.repository.purge_expired(now=now)
-    return {"purged": purged, "count": len(purged)}
-
-
-@router.post("/tasks/day-of", dependencies=[Depends(verify_tasks_token)])
-async def api_day_of_batch(
-    now: datetime | None = Query(default=None, description="デモ用の時刻上書き"),
-    agents: AgentBundle = Depends(get_agents),
-) -> dict:
-    """その日の遠征をまとめて1回進める（設計書 §4 当日モードの自律進行）。
-
-    利用者向けの `/api/expeditions/{id}/day-of` と違い、無人で回る入口。
-    """
-    updates = await agents.orchestrator.run_day_of_batch(now=now)
-    return {
-        "processed": len(updates),
-        "notified": sum(u.notified for u in updates),
-        "proposals": sum(len(u.proposals) for u in updates),
-        "expeditions": [
-            {
-                "exp_id": u.exp_id,
-                "route_delay_minutes": u.route_delay_minutes,
-                "dressing_alert": bool(u.dressing_alert),
-                "proposals": u.proposals,
-            }
-            for u in updates
-        ],
-    }

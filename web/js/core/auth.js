@@ -1,4 +1,4 @@
-/* ログインの入口。画面はトップ（/）だけが持ち、他のページは通行証を確かめるだけ。 */
+/* ログインの入口。画面は /login だけが持ち、他のページは通行証を確かめるだけ。 */
 
 import { api } from "./api.js";
 import * as store from "./store.js";
@@ -8,7 +8,7 @@ export const authConfig = () => store.cached("cos-meguri.authcfg", () => api("/a
 /** ログイン済みのレイヤーを返す。通行証が無ければトップへ戻す。 */
 export async function requireSession() {
   if (!store.token()) {
-    location.href = `/?next=${encodeURIComponent(location.pathname)}`;
+    location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
     return new Promise(() => {}); // 遷移するので、ここから先は動かさない
   }
   try {
@@ -20,7 +20,7 @@ export async function requireSession() {
   }
 }
 
-/** トップだけが使う。ログインしてから、来たかったページへ送る。 */
+/** ログイン画面だけが使う。入ってから、来たかったページへ送る。 */
 export async function startSession(token, handle) {
   store.setToken(token);
   const layer = await api("/api/auth/session", { method: "POST", body: { handle: handle || null } });

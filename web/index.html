@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=39">
+<link rel="stylesheet" href="/static/style.css?v=41">
 </head>
 <body class="p-home">
 
@@ -55,24 +55,8 @@
         <span class="chip">写真は登録のあとすぐ消します</span>
       </div>
       <div class="hero-cta">
-        <button id="btn-dev-login" class="primary">はじめる</button>
+        <a id="btn-start" class="btn primary" href="/login">使ってみる</a>
       </div>
-      <div id="login-error" class="out"></div>
-    </div>
-  </section>
-
-  <!-- メールとパスワードで入る場合だけ出す（本番） -->
-  <section id="view-login" class="card login-card hidden">
-    <h2>メールで入る</h2>
-    <p class="note">メールアドレスは Firebase Authentication だけが持ちます。コスめぐりのデータには残しません。</p>
-    <div class="grid">
-      <label>メールアドレス<input id="fb-email" type="email" autocomplete="username"></label>
-      <label>パスワード<input id="fb-password" type="password" autocomplete="current-password"></label>
-      <label>コス名<input id="fb-handle" maxlength="40" placeholder="レイヤーA"></label>
-    </div>
-    <div class="actions">
-      <button id="btn-fb-login" class="primary">入る</button>
-      <button id="btn-fb-signup">はじめて使う</button>
     </div>
   </section>
 </main>
@@ -119,7 +103,7 @@
         <span class="feature-step">5</span>
         <span class="ghost-no" aria-hidden="true">05</span>
         <h3>顔写真を預けるのが、<br>そもそも不安</h3>
-        <p>顔は数値だけを残して写真はすぐ消します。位置はイベントの当日だけ共有し、終わって24時間で自動的に消えます。</p>
+        <p>顔は数値だけを残して写真はすぐ消します。位置の共有はイベントの当日だけで、終わって24時間で無効になります。</p>
       </article>
     </div>
   </div>
@@ -156,7 +140,7 @@
   <section class="howto">
     <h2 class="section-title">使い方<span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
     <ol class="howto-list">
-      <li><b>コス名で入る。</b>メールも本名もいりません（本番はメールとパスワードで入ります）。</li>
+      <li><b>「使ってみる」を押す。</b>コス名だけで入れます。メールも本名もいりません（本番はメールとパスワードで入ります）。</li>
       <li><b>「AIに相談」に書く。</b>イベント・日付・作品/キャラ・出発駅・荷物。足りないぶんは聞き返します。</li>
       <li><b>できたプランを各ページで見る。</b>「AIに相談」はどのページでも開いたままです。書き足せばその場で組み直します。</li>
       <li><b>当日は開いておく。</b>遅れや片づけの時間は、お知らせ欄に届きます。</li>
@@ -165,6 +149,6 @@
 
 </main>
 
-<script type="module" src="/static/js/pages/home.js?v=39"></script>
+<script type="module" src="/static/js/pages/home.js?v=41"></script>
 </body>
 </html>

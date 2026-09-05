@@ -525,11 +525,6 @@ class Awase(BaseModel):
                 return m
         return self.members[0] if self.members else None
 
-    @property
-    def ttl_at(self) -> datetime:
-        """イベント終了 +24h。位置・進捗はここで自動削除する。"""
-        return self.event.ends_at + timedelta(hours=24)
-
     def member(self, layer_id: str) -> AwaseMember | None:
         for m in self.members:
             if m.layer_id == layer_id:
@@ -664,12 +659,14 @@ class AuditAction(str, Enum):
     FACE_IMAGE_DISCARDED = "face_image_discarded"
     FITTING_IMAGE_DISCARDED = "fitting_image_discarded"
     LOCATION_SHARE_ENABLED = "location_share_enabled"
+    # 定期実行を外したので、いまは誰も書かない。過去に保存した記録を
+    # 読み戻せるように値は残す（Firestore に文字列で入っている）
     LOCATION_SHARE_PURGED = "location_share_purged"
     RESCHEDULE_PROPOSED = "reschedule_proposed"
     RESCHEDULE_APPROVED = "reschedule_approved"
     RESCHEDULE_REJECTED = "reschedule_rejected"
     IP_GUARD_BLOCKED = "ip_guard_blocked"
-    EXPEDITION_PURGED = "expedition_purged"
+    EXPEDITION_PURGED = "expedition_purged"  # 同上（いまは誰も書かない）
     ACCOUNT_LINKED = "account_linked"  # 認証IDとコス名アカウントの紐付け
     PROGRESS_UPDATED_BY_ORGANIZER = "progress_updated_by_organizer"
     MEDIA_GENERATED = "media_generated"  # 完成イメージ・PV・音声の生成（設計書 §11）
@@ -683,8 +680,8 @@ class AuditLog(BaseModel):
     actor: str
     action: AuditAction
     subject_id: str | None = None
-    # この記録が「誰のこと」か。actor はエージェント名のことがあり（fitting-agent /
-    # scheduler など）、subject_id も遠征IDや合わせIDが入るので、持ち主だけは
+    # この記録が「誰のこと」か。actor はエージェント名のことがあり
+    # （fitting-agent など）、subject_id も遠征IDや合わせIDが入るので、持ち主だけは
     # 独立して持つ。記録の一覧を本人ぶんに絞るのに使う。
     layer_ids: list[str] = Field(default_factory=list)
     payload: dict = Field(default_factory=dict)

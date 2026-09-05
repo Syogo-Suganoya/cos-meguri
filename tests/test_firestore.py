@@ -133,24 +133,6 @@ async def test_expedition_is_listed_by_owner_and_by_date(repo):
     mine = await repo.list_expeditions(layer_id)
     assert [e.exp_id for e in mine] == [exp.exp_id]
 
-    today = await repo.list_expeditions_on(exp.event_date)
-    assert exp.exp_id in [e.exp_id for e in today]
-
-
-async def test_finished_expeditions_are_excluded_from_the_batch(repo):
-    """終了済みは当日バッチの対象にしない（複合インデックス無しで絞れている）。"""
-    date_key = _event().date_key
-    done = Expedition(
-        exp_id=f"exp_{_uid()}",
-        layer_id=f"ly_{_uid()}",
-        status=ExpeditionStatus.DONE,
-        event=_event(),
-        event_date=date_key,
-        character=CharacterRef(title="作品A", name="キャラB"),
-    )
-    await repo.save_expedition(done)
-    assert done.exp_id not in [e.exp_id for e in await repo.list_expeditions_on(date_key)]
-
 
 async def test_saving_twice_updates_instead_of_duplicating(repo):
     exp = Expedition(
@@ -234,41 +216,7 @@ async def test_chat_session_roundtrip(repo):
     assert stored.slots.day.date() == DAY.date()
 
 
-# ---------------------------------------------------------------- 合わせ・TTL
-
-
-async def test_purge_clears_location_and_members_after_ttl(repo):
-    """設計書 §7-3: TTL到達で位置・進捗が履歴ごと消える。"""
-    awase = Awase(
-        awase_id=f"aw_{_uid()}",
-        title="TTLテスト",
-        event=_event(),
-        members=[
-            AwaseMember(layer_id=f"ly_{_uid()}", handle="幹事", is_organizer=True),
-            AwaseMember(layer_id=f"ly_{_uid()}", handle="Aさん"),
-        ],
-        shoots=[Shoot(shoot_id=f"sh_{_uid()}", starts_at=DAY.replace(hour=13))],
-    )
-    member = awase.members[1]
-    member.location = awase_rules.enable_location_share(
-        member, awase.event.ends_at, eta=DAY.replace(hour=12)
-    ).location
-    await repo.save_awase(awase)
-
-    # 期限内は消えない
-    assert await repo.purge_expired(now=DAY.replace(hour=12)) == []
-    kept = await repo.get_awase(awase.awase_id)
-    assert kept.members[1].location.enabled is True
-
-    purged = await repo.purge_expired(now=awase.ttl_at + timedelta(hours=1))
-    assert awase.awase_id in purged
-
-    stored = await repo.get_awase(awase.awase_id)
-    assert stored.members == []
-    assert stored.shoots  # 枠と表題は残す
-
-    actions = {log.action for log in await repo.list_audit(subject_id=awase.awase_id)}
-    assert AuditAction.EXPEDITION_PURGED in actions
+# ---------------------------------------------------------------- 合わせ
 
 
 async def test_audit_can_be_filtered_by_subject(repo):

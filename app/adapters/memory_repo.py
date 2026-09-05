@@ -73,13 +73,6 @@ class MemoryRepository(RepositoryPort):
             if e.layer_id == layer_id
         ]
 
-    async def list_expeditions_on(self, event_date: str) -> list[Expedition]:
-        return [
-            e.model_copy(deep=True)
-            for e in self._expeditions.values()
-            if e.event_date == event_date and e.status is not ExpeditionStatus.DONE
-        ]
-
     # -- awase ----------------------------------------------------------
     async def save_awase(self, awase: Awase) -> Awase:
         self._awase[awase.awase_id] = awase.model_copy(deep=True)
@@ -142,45 +135,3 @@ class MemoryRepository(RepositoryPort):
             logs = [log for log in logs if layer_id in log.layer_ids]
         return logs
 
-    # -- TTL ------------------------------------------------------------
-    async def purge_expired(self, *, now: datetime | None = None) -> list[str]:
-        """設計書 §7-3: 期限切れの位置共有と、TTL到達の合わせを落とす。"""
-        now = now or utcnow()
-        purged: list[str] = []
-
-        for awase_id, stored in list(self._awase.items()):
-            cleaned, purged_members = awase_domain.purge_expired_locations(stored, now=now)
-            if purged_members:
-                self._awase[awase_id] = cleaned
-                purged.append(awase_id)
-                await self.append_audit(
-                    AuditLog(
-                        log_id=f"log_{uuid.uuid4().hex[:8]}",
-                        actor="scheduler",
-                        action=AuditAction.LOCATION_SHARE_PURGED,
-                        subject_id=awase_id,
-                        layer_ids=list(purged_members),
-                        payload={"members": purged_members},
-                    )
-                )
-
-            if awase_domain.should_purge(cleaned, now=now):
-                # 進捗・位置は履歴ごと落とす。枠と表題だけを残す
-                stripped = cleaned.model_copy(deep=True)
-                stripped.members = []
-                stripped.proposals = []
-                self._awase[awase_id] = stripped
-                await self.append_audit(
-                    AuditLog(
-                        log_id=f"log_{uuid.uuid4().hex[:8]}",
-                        actor="scheduler",
-                        action=AuditAction.EXPEDITION_PURGED,
-                        subject_id=awase_id,
-                        layer_ids=[m.layer_id for m in cleaned.members],
-                        payload={"reason": "ttl", "ttl_at": cleaned.ttl_at.isoformat()},
-                    )
-                )
-                if awase_id not in purged:
-                    purged.append(awase_id)
-
-        return purged

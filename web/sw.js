@@ -1,16 +1,17 @@
 /* 会場は電波が悪い。シェルだけ先にキャッシュして、APIは常にネットワークを見る。 */
 
-const CACHE = "cos-meguri-v16";
+const CACHE = "cos-meguri-v18";
 
 // ページとモジュールを両方いれる。ここに実在しないURLが混じると install が
 // 丸ごと失敗するので、tests/test_web_shell.py で全部 200 になることを見ている。
 const SHELL = [
   "/",
+  "/login",
   "/prep",
   "/plan",
   "/looks",
   "/day",
-  "/static/style.css?v=39",
+  "/static/style.css?v=41",
   "/static/js/core/dom.js",
   "/static/js/core/api.js",
   "/static/js/core/store.js",
@@ -21,6 +22,7 @@ const SHELL = [
   "/static/js/core/expedition.js",
   "/static/js/core/media.js",
   "/static/js/pages/home.js",
+  "/static/js/pages/login.js",
   "/static/js/pages/prep.js",
   "/static/js/pages/plan.js",
   "/static/js/pages/looks.js",

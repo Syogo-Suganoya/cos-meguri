@@ -3,7 +3,7 @@
    時計を進める・他の人になりすます、といった検証用の操作はここには置かない。
    実際の利用者が押すものだけを並べる。 */
 
-import { $, emptyState, esc, hhmm, mmdd, msg, on, withBusy } from "./../core/dom.js";
+import { $, emptyState, esc, hhmm, msg, on, withBusy } from "./../core/dom.js";
 import { api } from "./../core/api.js";
 import { requireSession } from "./../core/auth.js";
 import { eventNames, mountShell, updateRail } from "./../core/shell.js";
@@ -259,7 +259,6 @@ function renderAwase(current, proposal, note = "") {
     ${note ? `<div class="msg ok">${esc(note)}</div>` : ""}
     <div class="msg"><b>${esc(current.title)}</b>／${esc(current.event.name)}</div>
     ${shoots}${members}
-    <div class="msg">${mmdd(current.ttl_at)} ${hhmm(current.ttl_at)} に、位置と進み具合をまとめて消します。</div>
     ${approval}`;
 }
 

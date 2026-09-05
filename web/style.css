@@ -58,6 +58,7 @@
 }
 
 .p-home    { --hue: var(--c1); --on: var(--c1-on); }
+.p-login   { --hue: var(--c1); --on: var(--c1-on); }
 .p-prep    { --hue: var(--c1); --on: var(--c1-on); }
 .p-plan    { --hue: var(--c2); --on: var(--c2-on); }
 .p-looks   { --hue: var(--c3); --on: var(--c3-on); }

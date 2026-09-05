@@ -92,7 +92,7 @@ export async function mountShell({ step = null, authed = true, layer = null, rai
   document.body.insertAdjacentHTML(
     "beforeend",
     `<footer>
-       <p>顔写真は登録のあとすぐ消します。位置はイベントの当日だけ共有され、終わって24時間で自動的に消えます。</p>
+       <p>顔写真は登録のあとすぐ消します。位置の共有はイベントの当日だけで、終わって24時間で無効になります。</p>
      </footer>`
   );
 

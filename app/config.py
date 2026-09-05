@@ -35,10 +35,6 @@ class Settings(BaseSettings):
     # HS256 の推奨長（32バイト以上）を満たす既定値。開発用なので公開されていてよい
     dev_auth_secret: str = "cos-meguri-local-development-secret-key-0001"
 
-    # Cloud Scheduler から叩くバッチ用エンドポイントの共有シークレット。
-    # PWA を公開するためサービス全体が未認証許可になるので、Cloud Run の IAM では
-    # 守れない。ローカル以外では未設定のままだとバッチを閉じる（503）。
-    tasks_token: str = ""
 
     @property
     def is_local(self) -> bool:

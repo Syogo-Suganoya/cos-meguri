@@ -57,18 +57,6 @@ def enable_location_share(
     return updated
 
 
-def purge_expired_locations(awase: Awase, *, now: datetime | None = None) -> tuple[Awase, list[str]]:
-    """期限切れの位置共有を落とす。落とした layer_id を返す（監査ログ用）。"""
-    now = now or utcnow()
-    updated = awase.model_copy(deep=True)
-    purged: list[str] = []
-    for m in updated.members:
-        if m.location.enabled and not m.location.is_active(now):
-            m.location = m.location.redacted()
-            purged.append(m.layer_id)
-    return updated, purged
-
-
 def late_members(
     awase: Awase, shoot: Shoot, *, now: datetime | None = None
 ) -> list[AwaseMember]:
@@ -166,8 +154,3 @@ def apply_decision(
         updated_awase.proposals.append(updated_proposal)
 
     return updated_awase, updated_proposal
-
-
-def should_purge(awase: Awase, *, now: datetime | None = None) -> bool:
-    """TTL（イベント終了 +24h）に達したか。Cloud Scheduler から回す。"""
-    return (now or utcnow()) >= awase.ttl_at

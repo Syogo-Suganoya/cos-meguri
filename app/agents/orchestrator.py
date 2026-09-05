@@ -197,7 +197,7 @@ class Orchestrator:
 
     # -- 当日モード -------------------------------------------------------
     async def run_day_of(self, exp_id: str, *, now: datetime | None = None) -> DayOfUpdate:
-        """Cloud Scheduler から定期起動する自律進行。
+        """当日モードを1回進める。利用者が当日ページから起動する。
 
         1. 経路の運行実況を見て再計算し、遅延があれば本人に通知
         2. 撤収アラートの時刻に達していれば通知
@@ -253,23 +253,6 @@ class Orchestrator:
                 update.proposals = [p.proposal_id for p in proposals]
 
         return update
-
-    async def run_day_of_batch(self, *, now: datetime | None = None) -> list[DayOfUpdate]:
-        """その日の遠征をまとめて1回進める。Cloud Scheduler から定期起動する。
-
-        1件ずつの `run_day_of` は利用者の操作にも使うが、こちらは無人で回る入口。
-        1件が落ちても残りを進める（1人の遠征の失敗で全員の通知が止まらないように）。
-        """
-        now = now or datetime.now(JST)
-        today = now.astimezone(JST).strftime("%Y-%m-%d")
-
-        updates: list[DayOfUpdate] = []
-        for exp in await self.repository.list_expeditions_on(today):
-            try:
-                updates.append(await self.run_day_of(exp.exp_id, now=now))
-            except Exception:  # noqa: BLE001 — 1件の失敗で全体を止めない
-                logger.exception("day-of batch failed for %s", exp.exp_id)
-        return updates
 
 
 def _wake_up_hint(depart_at: datetime | None, makeup_minutes: int) -> str | None:

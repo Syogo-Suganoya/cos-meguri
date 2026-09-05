@@ -6,11 +6,6 @@
 
 開発環境の作り方は [CONTRIBUTING.md](CONTRIBUTING.md)、設計の背景は [設計書.md](設計書.md) を参照。
 
-> [!IMPORTANT]
-> `/api/tasks/*`（TTL削除・当日モードのバッチ）は **`TASKS_TOKEN` を設定しないと本番では動かない**。
-> PWA を公開するためサービス全体が未認証許可になるので、Cloud Run の IAM では守れず、
-> アプリ側で共有シークレットを突き合わせている。手順3と手順6を飛ばさないこと。
-
 ## 全体像
 
 PWA も API も同じ1サービスから配信する。フロント用のホスティングは要らない。
@@ -24,7 +19,6 @@ PWA も API も同じ1サービスから配信する。フロント用のホス�
 | Secret Manager | 外部APIキー |
 | Firebase Authentication | ログイン |
 | GMI Cloud（外部） | 完成イメージ・アフタームービー・音声ガイド |
-| Cloud Scheduler | 当日モードの自律進行・TTL削除 |
 | Cloud Logging | 監査ログ（Cloud Run から自動で流れる） |
 
 以下、プロジェクトIDは `cos-meguri`、リージョンは東京（`asia-northeast1`）を前提に書く。
@@ -51,7 +45,6 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   firestore.googleapis.com \
   secretmanager.googleapis.com \
-  cloudscheduler.googleapis.com \
   identitytoolkit.googleapis.com \
   generativelanguage.googleapis.com
 ```
@@ -104,12 +97,6 @@ printf '%s' 'YOUR_EKISPERT_KEY' | gcloud secrets create EKISPERT_API_KEY --data-
 printf '%s' 'YOUR_GMI_API_KEY' | gcloud secrets create GMI_API_KEY --data-file=-
 ```
 
-バッチ用エンドポイントの共有シークレットも作る。値は推測できない長さで生成する。
-
-```bash
-openssl rand -base64 32 | tr -d '\n' | gcloud secrets create TASKS_TOKEN --data-file=-
-```
-
 `printf` を使うのは、`echo` だと末尾の改行までシークレットに入ってしまうため。
 
 更新するときは新しいバージョンを足す。
@@ -139,7 +126,7 @@ gcloud run deploy cos-meguri \
   --service-account cos-meguri-run@cos-meguri.iam.gserviceaccount.com \
   --allow-unauthenticated \
   --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,VTO_MODE=live,TRANSIT_MODE=live,LLM_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,MEDIA_MODE=live,EKISPERT_MCP_URL=https://YOUR_MCP_HOST" \
-  --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUCAM_API_KEY=YOUCAM_API_KEY:latest,YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest,GMI_API_KEY=GMI_API_KEY:latest,TASKS_TOKEN=TASKS_TOKEN:latest"
+  --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUCAM_API_KEY=YOUCAM_API_KEY:latest,YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest,GMI_API_KEY=GMI_API_KEY:latest"
 ```
 
 ポイント:
@@ -151,47 +138,10 @@ gcloud run deploy cos-meguri \
   パスワード検証なしのログインが本番に出ないよう、起動時に例外で止まる
 - キーが未設定のプロバイダは `live` 指定でも自動的に mock に落ちる。まず全部 mock で出して、
   キーが揃ったものから `live` に切り替えるのが安全
-- **`TASKS_TOKEN` が未設定だと `/api/tasks/*` は 503 で閉じる**（開いたまま公開されるより安全側に倒している）
 - `REPOSITORY=firestore` は既定値だが、取り違えを防ぐため明示している。`memory` にすると
   インスタンスの再起動でデータが消える（テスト専用）
 
-## 6. 定期実行を2本登録する
-
-手順3で作った `TASKS_TOKEN` の値を控えておく。
-
-```bash
-TOKEN=$(gcloud secrets versions access latest --secret=TASKS_TOKEN)
-```
-
-**当日モードの自律進行**（動線の再計算・撤収アラート・到着監視）。開催中の時間帯だけ
-15分おきに回す。その日の遠征だけを拾うので、開催日でなければ何もしない。
-
-```bash
-gcloud scheduler jobs create http cos-meguri-day-of \
-  --location=asia-northeast1 \
-  --schedule="*/15 7-20 * * *" \
-  --time-zone="Asia/Tokyo" \
-  --uri="https://SERVICE_URL/api/tasks/day-of" \
-  --http-method=POST \
-  --headers="X-Tasks-Token=$TOKEN"
-```
-
-**TTL削除**。位置・進捗はイベント終了+24hで消す（設計書 §7-3）。毎時で足りる。
-
-```bash
-gcloud scheduler jobs create http cos-meguri-purge \
-  --location=asia-northeast1 \
-  --schedule="0 * * * *" \
-  --time-zone="Asia/Tokyo" \
-  --uri="https://SERVICE_URL/api/tasks/purge" \
-  --http-method=POST \
-  --headers="X-Tasks-Token=$TOKEN"
-```
-
-トークンが合わなければ 403、`TASKS_TOKEN` 未設定なら 503 が返る。
-どちらも Cloud Scheduler の実行履歴に失敗として残るので、設定漏れに気づける。
-
-## 7. 動作確認
+## 6. 動作確認
 
 ```bash
 curl -s https://SERVICE_URL/healthz
@@ -204,8 +154,8 @@ Firebase の設定が入っていない（起動時のログに警告が出て�
 {"status":"ok","env":"production","providers":{"vto":"vto:youcam","transit":"transit:ekispert","llm":"llm:gemini","notifier":"notifier:in_app","repository":"repository:firestore","auth":"auth:firebase"}}
 ```
 
-ブラウザで `https://SERVICE_URL` を開き、ログイン画面がメールアドレス入力になっていれば
-Firebase 経路に乗っている（開発用ログインなら「コス名だけ」の画面が出る）。
+ブラウザで `https://SERVICE_URL/login` を開き、メールアドレス入力の欄が出ていれば
+Firebase 経路に乗っている（開発用ログインなら「はじめる」ボタンだけの画面が出る）。
 
 ---
 
@@ -223,7 +173,6 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
    - Artifact Registry API
    - Firestore API
    - Secret Manager API
-   - Cloud Scheduler API
    - Identity Toolkit API
    - Generative Language API
 
@@ -250,8 +199,6 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 1. **Secret Manager** → 「シークレットを作成」
 2. 名前に `GOOGLE_API_KEY`、値に Gemini の APIキーを貼る → 「シークレットを作成」
 3. 同様に `YOUCAM_API_KEY` / `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` / `GMI_API_KEY` を作る
-4. `TASKS_TOKEN` も作る。値はパスワード生成器などで推測できない文字列にし、控えておく
-   （手順6のスケジューラ設定で使う）
 
 > 値を貼るときは末尾に改行や空白が入らないよう注意する（コピー時に混入しやすい）。
 
@@ -289,34 +236,14 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
      | `EKISPERT_MCP_URL` | MCPサーバーのURL |
 
    - 同じタブの「シークレットを参照」で、`GOOGLE_API_KEY` / `YOUCAM_API_KEY` /
-     `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` / `GMI_API_KEY` / `TASKS_TOKEN` を
+     `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` / `GMI_API_KEY` を
      **環境変数として** 公開する（バージョンは `latest`）
 6. 「作成」
 
 ローカルのソースから出したい場合は、パターンAの `gcloud run deploy --source .` を使う
 （コンソールにローカルフォルダをアップロードする導線は無い）。
 
-## 6. 定期実行を2本登録する
-
-**当日モードの自律進行:**
-
-1. **Cloud Scheduler** → 「ジョブを作成」
-2. 名前: `cos-meguri-day-of`、リージョン: `asia-northeast1`
-3. 頻度: `*/15 7-20 * * *`、タイムゾーン: **日本標準時**
-4. ターゲットタイプ: **HTTP**
-   - URL: `https://SERVICE_URL/api/tasks/day-of`
-   - HTTPメソッド: **POST**
-   - 「その他の設定を表示」→ **HTTPヘッダー** に
-     `X-Tasks-Token` ＝ 手順3で控えた値 を追加
-5. 「作成」
-
-**TTL削除:** 同じ手順で、名前 `cos-meguri-purge`、頻度 `0 * * * *`、
-URL `https://SERVICE_URL/api/tasks/purge` として作る（ヘッダーは同じ）。
-
-作成後、ジョブ一覧の「強制実行」で1回叩き、結果が **成功** になることを確認する。
-403 ならヘッダーの値が違い、503 なら Cloud Run 側に `TASKS_TOKEN` が入っていない。
-
-## 7. 動作確認
+## 6. 動作確認
 
 1. **Cloud Run → cos-meguri** のページ上部に出ている URL を開く
 2. 末尾に `/healthz` を付けて、`providers` が期待どおりか確認する
@@ -421,13 +348,11 @@ curl -s https://SERVICE_URL/healthz | python3 -m json.tool
 |---|---|---|
 | 開発用ログイン（パスワード検証なし）… | `AUTH_MODE=firebase` が効いていない | Firebase の設定を入れ直す |
 | `xxx: live 指定ですがキーが無いため mock…` | シークレットの参照漏れ | `--update-secrets` の綴りを確認 |
-| `TASKS_TOKEN が未設定です` | バッチが閉じたまま | 手順3・5でシークレットを注入 |
 
 あわせて次を確認する。
 
-1. Cloud Scheduler の2ジョブを「強制実行」して、どちらも **成功** になる
-2. ブラウザでログインし、遠征を1件作って `/api/me/notifications` が引けること
-3. `providers.repository` が `repository:firestore` になっていること
+1. ブラウザでログインし、遠征を1件作って `/api/me/notifications` が引けること
+2. `providers.repository` が `repository:firestore` になっていること
    （`repository:memory` だとインスタンス再起動でデータが消える）
 
 ## エンドポイントの保護の考えかた
@@ -435,30 +360,10 @@ curl -s https://SERVICE_URL/healthz | python3 -m json.tool
 | 対象 | 守りかた |
 |---|---|
 | 利用者向けAPI | Firebase の ID トークン検証（アプリ側） |
-| `/api/tasks/*` | `X-Tasks-Token` の突き合わせ（アプリ側） |
 | PWA・`/healthz`・`/api/auth/config` | 公開 |
 
 Cloud Run の IAM（`--allow-unauthenticated` を外す方法）は使えない。PWA を
 ブラウザから直接開かせる以上、サービス自体は公開せざるを得ないため。
-より厳密に分けたい場合は、バッチ用エンドポイントだけを認証必須の別サービスとして
-デプロイし、Scheduler から OIDC で呼ぶ構成にもできる。
-
-```bash
-gcloud iam service-accounts create cos-meguri-scheduler
-gcloud run services add-iam-policy-binding cos-meguri-tasks \
-  --region=asia-northeast1 \
-  --member="serviceAccount:cos-meguri-scheduler@cos-meguri.iam.gserviceaccount.com" \
-  --role="roles/run.invoker"
-gcloud scheduler jobs create http cos-meguri-purge \
-  --location=asia-northeast1 \
-  --schedule="0 * * * *" \
-  --uri="https://TASKS_SERVICE_URL/api/tasks/purge" \
-  --http-method=POST \
-  --oidc-service-account-email="cos-meguri-scheduler@cos-meguri.iam.gserviceaccount.com" \
-  --oidc-token-audience="https://TASKS_SERVICE_URL/api/tasks/purge"
-```
-
-OIDC の audience には URL パラメータを含めない。
 
 ---
 
@@ -490,11 +395,8 @@ gcloud run services update-traffic cos-meguri --to-revisions=REVISION_NAME=100
 | ログインできない | Firebase コンソールで「メール/パスワード」が有効か、`FIREBASE_WEB_API_KEY` が正しいか |
 | 401 が返る | ID トークンの期限切れ。PWA は自動でログアウトして再ログインを促す |
 | Firestore の書き込みが失敗 | 実行サービスアカウントに `roles/datastore.user` が付いているか |
-| バッチが 403 | Scheduler のヘッダー `X-Tasks-Token` の値がシークレットと違う |
-| バッチが 503 | Cloud Run に `TASKS_TOKEN` が入っていない |
 | 書き込んだデータが見つからない | `FIRESTORE_EMULATOR_HOST` が設定されていないか確認（本番では未設定が正しい） |
 | 再起動でデータが消える | `providers.repository` が `repository:memory` になっている |
-| 当日モードが何もしない | 当日の遠征が無いだけかもしれない。`processed` が0なら対象なし |
 | 完成イメージ・音声が 502 | GMI の生成失敗か時間切れ。ログに `gmi ...` の警告が出る |
 | 生成物が「モック」表示のまま | `GMI_API_KEY` が入っていない（`/healthz` の warnings に出る） |
 | ビルドが失敗 | Cloud Build のログ。`pyproject.toml` の依存解決で落ちていることが多い |

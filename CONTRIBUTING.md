@@ -62,9 +62,6 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 使い、`memory` はテストだけで使う。プロセスが死ぬと消える保存先を既定にしておくと、
 「ローカルでは動くのに本番で消える」類の不具合が見つからないため。
 
-`TASKS_TOKEN` はスケジューラ用エンドポイントの共有シークレット。ローカルでは未設定でも
-通るが、`APP_ENV` が local/test 以外では未設定だとバッチが閉じる。
-
 ### 認証だけは例外
 
 `AUTH_MODE=dev` はコス名を入れるだけでJWTを発行し、**パスワードを検証しない**。
@@ -170,10 +167,6 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 利用者向けのエンドポイントはすべて `Authorization: Bearer <IDトークン>` が要る。
 誰であるかは必ずトークンから決め、body の `layer_id` は信用しない。
 
-`/api/tasks/*` はスケジューラ用で、`X-Tasks-Token` ヘッダで守る。PWA を公開すると
-サービス全体が未認証許可になり Cloud Run の IAM では守れないため、アプリ側で
-突き合わせている。`TASKS_TOKEN` 未設定のときはローカルだけ通し、それ以外は 503 で閉じる。
-
 | メソッド | パス | 内容 |
 |---|---|---|
 | GET | `/api/auth/config` | ログイン画面が使う公開情報（provider / web APIキー） |
@@ -191,8 +184,6 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 | POST | `/api/awase` | 合わせ作成。招集はコス名で行う |
 | POST | `/api/awase/{id}/monitor` | 到着監視＋リスケ起案（確定はしない） |
 | POST | `/api/awase/{id}/proposals/{pid}/decision` | 主催者の承認/却下 |
-| POST | `/api/tasks/day-of` | その日の遠征をまとめて進める（スケジューラ用） |
-| POST | `/api/tasks/purge` | TTL削除（位置・進捗）（スケジューラ用） |
 | GET | `/api/audit` | 監査ログ |
 
 `/docs`（Swagger UI）でも一覧できる。
@@ -226,12 +217,11 @@ Firestore アダプタの結合テスト（11件）。エミュレータに実�
 | §7-1 素顔とコス名の分離 | 画像は解析後に `del`、破棄証跡を audit へ | `test_face_analysis_discards_image_and_logs_it` |
 | §7-1 認証 | 保持するのは uid のみ。メールは Firebase 側に留める | `test_account_stores_no_personal_data` |
 | §7-2 公平性 | 中庸も含め全工程に個別化根拠。明度を変える指示を出さない | `test_no_skin_lightening_instructions` ほか |
-| §7-3 位置共有の時限性 | `LocationShare.expires_at` ＋ `purge_expired()` | `test_location_share_expires_and_is_purged` |
+| §7-3 位置共有の時限性 | `LocationShare.expires_at`（失効後は ETA を採らない） | `test_location_share_goes_inactive_after_the_event` |
 | §7-4 二次創作ガイドライン | `guardrails.py`。共有テキストからキャラ名を落とす | `test_ip_guard_returns_422` |
 | §7-5 リスケの承認制 | 主催者以外は 403。起案だけでは枠が動かない | `test_shoot_does_not_move_until_organizer_approves` |
 | §7-6 通知をアプリ内で閉じる | 自律通知はお知らせ欄へ。会場時刻で書く | `test_day_of_alert_lands_in_the_in_app_inbox` |
 | §7-7 権限の境界 | 他人の遠征・お知らせ・合わせは見えない | `test_inbox_is_private_to_its_owner` ほか |
-| §7-7 バッチの保護 | トークン不一致は403、未設定は503で閉じる | `test_tasks.py` |
 | §6 データモデル | Firestore と往復しても入れ子・列挙型が壊れない | `test_firestore.py` |
 | §11 生成メディア | キャラ名をプロンプトに入れない。AI生成を明示する | `test_look_prompt_never_contains_the_character_name` |
 | §11 ボイスクローン不使用 | 依頼を422で止め、証跡を残す | `test_voice_cloning_is_refused` |

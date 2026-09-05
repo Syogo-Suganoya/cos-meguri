@@ -60,8 +60,6 @@ async def healthz() -> dict:
         degraded = providers[name].endswith((":mock", ":stub"))
         if mode == "live" and degraded:
             warnings.append(f"{name}: live 指定ですがキーが無いため mock で動いています")
-    if not settings.tasks_token and not settings.is_local:
-        warnings.append("TASKS_TOKEN が未設定です。バッチ用エンドポイントは閉じています")
 
     return {
         "status": "ok",
@@ -115,6 +113,7 @@ if WEB_DIR.is_dir():
     # 機能ごとのページ。catch-all にすると /api や /docs の除外が要るうえ、
     # 打ち間違いが全部200になるので、出すページだけを明示する。
     PAGES = {
+        "login": "login.html",
         "prep": "prep.html",
         "plan": "plan.html",
         "looks": "looks.html",

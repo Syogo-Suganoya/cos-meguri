@@ -113,7 +113,7 @@ def apply_disruptions(
 ) -> tuple[RoutePlan, int]:
     """運行障害を経路に反映し、(更新後プラン, 追加遅延分) を返す。
 
-    当日モードではこれを Cloud Scheduler 起点で回し、遅延が出たら再計算する。
+    当日モードを進めるたびにこれを通し、遅延が出ていれば経路を組み直す。
     """
     lines = {s.line for s in plan.segments}
     hit = [d for d in disruptions if d.line in lines]

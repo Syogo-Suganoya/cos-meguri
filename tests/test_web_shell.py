@@ -17,6 +17,7 @@ WEB = Path(__file__).resolve().parent.parent / "web"
 # URL → HTML ファイル。main.py の PAGES と対になる
 PAGES = {
     "/": WEB / "index.html",
+    "/login": WEB / "pages" / "login.html",
     "/prep": WEB / "pages" / "prep.html",
     "/plan": WEB / "pages" / "plan.html",
     "/looks": WEB / "pages" / "looks.html",

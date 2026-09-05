@@ -123,42 +123,15 @@ def test_rejected_proposal_leaves_shoot_untouched():
     assert updated.shoots[0].starts_at == DAY.replace(hour=13)
 
 
-def test_location_share_expires_and_is_purged():
-    """設計書 §7-3: 終了+24h を過ぎたら値ごと消える。"""
+def test_location_share_goes_inactive_after_the_event():
+    """終了+24h を過ぎた位置共有は、失効として扱う（ETA も採らない）。"""
     awase = make_awase()
     member = awase.members[1]
     member.location = awase_rules.enable_location_share(
         member, EVENT.ends_at, eta=DAY.replace(hour=12)
     ).location
     assert member.location.is_active(DAY.replace(hour=12))
-
-    after_ttl = EVENT.ends_at + timedelta(hours=25)
-    assert not member.location.is_active(after_ttl)
-
-    cleaned, purged = awase_rules.purge_expired_locations(awase, now=after_ttl)
-    assert purged == ["ly_a"]
-    assert cleaned.members[1].location.eta is None
-    assert cleaned.members[1].location.enabled is False
-
-
-async def test_repository_purge_writes_audit_trail():
-    repo = MemoryRepository()
-    awase = make_awase()
-    member = awase.members[1]
-    member.location = awase_rules.enable_location_share(
-        member, EVENT.ends_at, eta=DAY.replace(hour=12)
-    ).location
-    await repo.save_awase(awase)
-
-    purged = await repo.purge_expired(now=EVENT.ends_at + timedelta(hours=25))
-    assert purged == ["aw_test"]
-
-    actions = {log.action for log in await repo.list_audit(subject_id="aw_test")}
-    assert AuditAction.LOCATION_SHARE_PURGED in actions
-    assert AuditAction.EXPEDITION_PURGED in actions
-
-    stored = await repo.get_awase("aw_test")
-    assert stored.members == []  # 進捗ごと消える
+    assert not member.location.is_active(EVENT.ends_at + timedelta(hours=25))
 
 
 async def test_agent_monitor_notifies_organizer_and_logs():
