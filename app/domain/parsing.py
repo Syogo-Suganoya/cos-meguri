@@ -37,11 +37,54 @@ _ORIGIN_PATTERNS = [
     re.compile(rf"出発(?:駅|地)?は({_STATION})"),
 ]
 
-# 「作品名の キャラ名」「作品名:〜 キャラ:〜」
-_CHARACTER_PATTERNS = [
-    re.compile(r"作品[名:：]?\s*(?:は)?\s*([^\s、。,]+).{0,8}?キャラ(?:名|クター)?[:：]?\s*(?:は)?\s*([^\s、。,]+)"),
-    re.compile(r"([^\s、。,]{2,20})の([^\s、。,]{2,20})(?:のコス|で参加|をやり|になり)"),
-]
+# 作品名・キャラ名は「キーの位置を見つけて、間を切り出して、掃除する」方式で読む。
+# 1本の正規表現で値まで捕まえようとすると、助詞・語尾・鉤括弧が値に混ざる
+# （「作品は「星のカケラ」でキャラはリリカです」→ 「星のカケラ」で / リリカです）。
+_QUOTES = {"「": "」", "『": "』", "“": "”", '"': '"', "【": "】", "《": "》"}
+
+# キーと認めるのは、直後に区切り（名・は・が・コロン・鉤括弧）が続くときだけ。
+# そうしないと「作品X」の「作品」をキーと誤認して、値が「X」になる。
+_TITLE_KEY = re.compile(
+    r"(?:作品|タイトル|シリーズ)名"
+    r"|(?:作品|タイトル|シリーズ)(?=\s*(?:[はが]|[:：=＝]|[「『“\"【《]))"
+    r"|(?i:series|title)(?=\s*[:：=＝])"
+)
+_CHAR_KEY = re.compile(
+    r"キャラ(?:クター)?名"
+    r"|キャラ(?:クター)?(?=\s*(?:[はが]|[:：=＝]|[「『“\"【《]))"
+    r"|(?i:character)(?=\s*[:：=＝])"
+)
+
+_LEAD = re.compile(r"^[\s:：=＝はがのを、,]+")
+_TAIL_PHRASE = re.compile(
+    r"(?:のコスをします|のコスプレ|のコス|で参加します|で参加|をやります|をやり"
+    r"|になります|になり|でした|です|だよ|ます|する)$"
+)
+_TAIL_PARTICLE = re.compile(r"[はがでのをにともへや]$")
+_BREAK = re.compile(r"[、。,，！？!?]")
+
+# キーが無い「作品名のキャラ名のコス」形式。非貪欲にして語尾を巻き込ませない。
+_BARE_PATTERN = re.compile(
+    r"([^\s、。,]{2,20}?)の([^\s、。,]{2,20}?)(?:のコス|で参加|をやり|になり)"
+)
+
+
+def _clean_value(raw: str) -> str | None:
+    """切り出した値から助詞・語尾・鉤括弧を落として、名前だけを残す。"""
+    value = _LEAD.sub("", raw).strip()
+    if value and value[0] in _QUOTES:
+        # 括られていれば中身が答え。中の助詞を消す必要もない
+        end = value.find(_QUOTES[value[0]], 1)
+        if end > 1:
+            return value[1:end]
+    value = _BREAK.split(value)[0].strip()
+    previous = None
+    while value != previous:  # 「のコスをします」を段階的に落とす
+        previous = value
+        value = _TAIL_PHRASE.sub("", value)
+    if len(value) > 2:  # 2文字の名前から助詞を削らない（「リカ」など）
+        value = _TAIL_PARTICLE.sub("", value)
+    return value or None
 
 
 def _parse_day(text: str, *, now: datetime | None = None) -> datetime | None:
@@ -105,10 +148,29 @@ def _parse_origin(text: str) -> str | None:
 
 
 def _parse_character(text: str) -> tuple[str | None, str | None]:
-    for pattern in _CHARACTER_PATTERNS:
-        found = pattern.search(text)
-        if found:
-            return found.group(1), found.group(2)
+    title_key = _TITLE_KEY.search(text)
+    char_key = _CHAR_KEY.search(text)
+
+    if title_key and char_key:
+        if title_key.end() < char_key.start():  # 作品 → キャラ の順
+            return (
+                _clean_value(text[title_key.end() : char_key.start()]),
+                _clean_value(text[char_key.end() :]),
+            )
+        return (  # キャラ → 作品 の順
+            _clean_value(text[title_key.end() :]),
+            _clean_value(text[char_key.end() : title_key.start()]),
+        )
+
+    # 片方だけでも拾う。会話は1項目ずつ聞き返すので、片方ずつ答えられて困らない
+    if title_key:
+        return _clean_value(text[title_key.end() :]), None
+    if char_key:
+        return None, _clean_value(text[char_key.end() :])
+
+    found = _BARE_PATTERN.search(text)
+    if found:
+        return _clean_value(found.group(1)), _clean_value(found.group(2))
     return None, None
 
 
@@ -135,8 +197,9 @@ def extract_slots(
         slots["luggage_mode"] = luggage.value
 
     title, character = _parse_character(text)
-    if title and character:
+    if title:
         slots["title"] = title
+    if character:
         slots["character"] = character
 
     return slots

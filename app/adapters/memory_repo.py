@@ -132,10 +132,14 @@ class MemoryRepository(RepositoryPort):
         self._audit.append(log.model_copy(deep=True))
         return log
 
-    async def list_audit(self, *, subject_id: str | None = None) -> list[AuditLog]:
+    async def list_audit(
+        self, *, subject_id: str | None = None, layer_id: str | None = None
+    ) -> list[AuditLog]:
         logs = [log.model_copy(deep=True) for log in self._audit]
         if subject_id:
             logs = [log for log in logs if log.subject_id == subject_id]
+        if layer_id:
+            logs = [log for log in logs if layer_id in log.layer_ids]
         return logs
 
     # -- TTL ------------------------------------------------------------
@@ -155,6 +159,7 @@ class MemoryRepository(RepositoryPort):
                         actor="scheduler",
                         action=AuditAction.LOCATION_SHARE_PURGED,
                         subject_id=awase_id,
+                        layer_ids=list(purged_members),
                         payload={"members": purged_members},
                     )
                 )
@@ -171,6 +176,7 @@ class MemoryRepository(RepositoryPort):
                         actor="scheduler",
                         action=AuditAction.EXPEDITION_PURGED,
                         subject_id=awase_id,
+                        layer_ids=[m.layer_id for m in cleaned.members],
                         payload={"reason": "ttl", "ttl_at": cleaned.ttl_at.isoformat()},
                     )
                 )

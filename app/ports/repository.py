@@ -88,7 +88,9 @@ class RepositoryPort(ABC):
     async def append_audit(self, log: AuditLog) -> AuditLog: ...
 
     @abstractmethod
-    async def list_audit(self, *, subject_id: str | None = None) -> list[AuditLog]: ...
+    async def list_audit(
+        self, *, subject_id: str | None = None, layer_id: str | None = None
+    ) -> list[AuditLog]: ...
 
     # -- TTL ------------------------------------------------------------
     @abstractmethod

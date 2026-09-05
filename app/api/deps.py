@@ -86,6 +86,7 @@ class AgentBundle:
                 actor=layer.layer_id,
                 action=AuditAction.ACCOUNT_LINKED,
                 subject_id=layer.layer_id,
+                layer_ids=[layer.layer_id],
                 payload={
                     "provider": provider,
                     "linked_pending_account": linked_pending,

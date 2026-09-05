@@ -69,7 +69,7 @@ def _base(skin: FitzpatrickType, char: CharacterRef) -> _Draft:
         d.add(
             "血色が透けやすいので、赤みの出る小鼻と目周りにコントロールカラーを点置きしてから伸ばす。",
             "Redness shows easily on type I–II: dot a colour corrector around the nose and eyes first.",
-            reason=f"Fitzpatrick {skin.value}: 赤みが出やすい",
+            reason=f"肌タイプ {skin.value}: 赤みが出やすい",
             minutes=2,
         )
     elif skin.is_deep:
@@ -78,14 +78,14 @@ def _base(skin: FitzpatrickType, char: CharacterRef) -> _Draft:
             "キャラの肌色にはベースではなく、後段のハイライトと影で寄せる。",
             "Avoid ashy cast: use two shades (face line vs. eyelids) and press the seam with a sponge. "
             "Match the character's tone with highlight and shadow later — not by changing your base shade.",
-            reason=f"Fitzpatrick {skin.value}: 白浮き回避・明度は変えない",
+            reason=f"肌タイプ {skin.value}: 白浮き回避・明度は変えない",
             minutes=3,
         )
     else:
         d.add(
             "テカりやすいTゾーンだけ皮脂崩れ防止を重ねる。",
             "Add a mattifying layer on the T-zone only.",
-            reason=f"Fitzpatrick {skin.value}: Tゾーンの崩れ対策",
+            reason=f"肌タイプ {skin.value}: Tゾーンの崩れ対策",
             minutes=1,
         )
     d.add(
@@ -137,19 +137,19 @@ def _contour(skin: FitzpatrickType, attrs: FaceAttributes) -> _Draft:
         d.add(
             "グレー寄りの影は灰色に沈むので、赤みかプラム寄りの影色を選ぶ。",
             "Grey-based contour reads ashy on deeper skin — pick a red or plum-leaning shade.",
-            reason=f"Fitzpatrick {skin.value}: 影色の色相を選び直す",
+            reason=f"肌タイプ {skin.value}: 影色の色相を選び直す",
         )
     elif skin.is_light:
         d.add(
             "オレンジ寄りの影は浮くので、グレーベージュ寄りを薄く重ねる。",
             "Orange-leaning contour looks stripey here — build up a grey-beige shade thinly.",
-            reason=f"Fitzpatrick {skin.value}: 影色の色相を選び直す",
+            reason=f"肌タイプ {skin.value}: 影色の色相を選び直す",
         )
     else:
         d.add(
             "ベージュ〜ブラウンの影が馴染む。濃さより、頬骨下の入れ始めの位置で決まる。",
             "Beige-to-brown shadow blends well here; placement under the cheekbone matters more than depth.",
-            reason=f"Fitzpatrick {skin.value}: 影色の色相を選び直す",
+            reason=f"肌タイプ {skin.value}: 影色の色相を選び直す",
         )
     if attrs.low("nose_bridge"):
         d.add(
@@ -190,13 +190,13 @@ def _highlight(skin: FitzpatrickType, attrs: FaceAttributes) -> _Draft:
         d.add(
             "白いパール系は粉っぽく出るので、ゴールド／ブロンズの偏光を使い、量より置き場所で効かせる。",
             "White pearl looks chalky — use gold or bronze shimmer and rely on placement rather than quantity.",
-            reason=f"Fitzpatrick {skin.value}: ハイライトの色を選び直す",
+            reason=f"肌タイプ {skin.value}: ハイライトの色を選び直す",
         )
     elif skin.is_light:
         d.add(
             "シャンパン〜シルバー系を少量。強いゴールドは肌から浮く。",
             "A small amount of champagne or silver; strong gold separates from the skin here.",
-            reason=f"Fitzpatrick {skin.value}: ハイライトの色を選び直す",
+            reason=f"肌タイプ {skin.value}: ハイライトの色を選び直す",
         )
     if attrs.high("brow_depth"):
         d.add(
@@ -225,7 +225,7 @@ def _eyeshadow(skin: FitzpatrickType, attrs: FaceAttributes, char: CharacterRef)
         d.add(
             "淡色は発色しないので、白の下地を仕込んでから重ねると色が出る。",
             "Pale shades won't show without a white base underneath — lay that down first.",
-            reason=f"Fitzpatrick {skin.value}: 淡色の発色を確保",
+            reason=f"肌タイプ {skin.value}: 淡色の発色を確保",
             minutes=2,
         )
     if attrs.high("eye_roundness"):
@@ -322,7 +322,7 @@ def _lip(skin: FitzpatrickType, attrs: FaceAttributes) -> _Draft:
         d.add(
             "淡いリップは下地を1枚仕込まないと沈む。",
             "Pale lipsticks need a base layer or they go muddy.",
-            reason=f"Fitzpatrick {skin.value}: 淡色リップの発色",
+            reason=f"肌タイプ {skin.value}: 淡色リップの発色",
         )
     return d
 
@@ -337,7 +337,7 @@ def _wig_line(skin: FitzpatrickType) -> _Draft:
     d.add(
         "自分の肌の色に合わせた粉を使う（ネットの色ではなく肌に合わせる）。",
         "Match the powder to your own skin, not to the wig cap colour.",
-        reason=f"Fitzpatrick {skin.value}: 生え際の色は肌基準",
+        reason=f"肌タイプ {skin.value}: 生え際の色は肌基準",
     )
     return d
 

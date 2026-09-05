@@ -100,9 +100,28 @@ app/
 ├── agents/             設計書 §4 のエージェント構成
 └── api/                HTTP 層
 web/                    PWA（ログイン・チャット・お知らせも自作）
+├── index.html          トップ（できること・使い方・ログイン）
+├── pages/              prep / plan / looks / day の4画面
+├── js/core/            全ページ共通（api・認証・枠・チャット・お知らせ・プラン復元）
+└── js/pages/           画面ごとの初期化。1画面1モジュール
 docs/                   アーキテクチャ図の生成スクリプト
-tests/                  ユニット105件＋Firestore結合11件
+tests/                  ユニット137件＋Firestore結合11件
 ```
+
+### フロントの決めごと
+
+- **1画面1モジュール。**`<script type="module" src="/static/js/pages/plan.js">` だけを読む。
+  バンドラは使わない。ページが持たない要素にハンドラを付けないので、
+  「id が無くて例外」で画面全体が死ぬことがない（`core/dom.js` の `on()` がその役）
+- **枠（看板・シェブロン・チャット・お知らせ・脚注）は `core/shell.js` と `core/chat.js` が差し込む。**
+  HTML を6枚に複製するとズレるので、枠の出どころはここ1箇所
+- **`onclick` 属性は使わない。**module スコープの関数は呼べず、押しても無言で何も起きない。
+  イベント委譲（`data-*` 属性）で受ける。`tests/test_web_shell.py` が見張っている
+- **モジュールの先頭で実行する処理は、参照する `const` より後ろに置く。**
+  前に置くと初期化前アクセスで例外になり、その画面だけ丸ごと動かない
+- **ページをまたぐ状態は `core/store.js` に集約する。**`exp_id` と `awase_id` だけを控え、
+  正はサーバ（`GET /api/chat` の `exp_id`）。合わせは一覧APIが無いので控えが必須
+- プランができたら `cosmeguri:expedition` を投げる。開いている画面がその場で描き直す
 
 ### 依存の向き
 
@@ -241,8 +260,20 @@ docker compose --profile docs run --rm diagram
 
 ### 静的ファイルを変えたとき
 
-`web/` の CSS / JS を変えたら、`index.html` のクエリ（`?v=2`）と `sw.js` の
-`CACHE` 名を上げる。PWA のキャッシュが古いまま残るため。
+`web/` を変えたら **`sw.js` の `CACHE` 名を上げる**。CSS は各HTMLのクエリ（`?v=7`）も
+`sw.js` の `SHELL` と揃えて上げる。ページのエントリJS（`js/pages/*.js`）にもクエリを付ける。
+`core/*` は `import` から読まれるのでクエリは付けない（付けると `import` 側にも書く羽目になる）。
+
+モジュールの更新が届く経路は2つある。どちらか片方でも欠けると、直したはずの
+コードが動かない状態で悩むことになる。
+
+- `/static` は `Cache-Control: no-cache` を付けて配信している（`app/main.py` の
+  `RevalidatingStaticFiles`）。ブラウザは毎回 ETag で確かめるので、変わっていなければ 304
+- Service Worker は `/static` を stale-while-revalidate で扱う。キャッシュを先に返しつつ
+  裏で取り直すので、`CACHE` 名の更新を忘れても1回ぶん遅れで新しくなる
+
+ローカルで古いまま動いているように見えたら、DevTools で Service Worker を unregister して
+キャッシュを消すのが確実。
 
 ## PR を出す前に
 

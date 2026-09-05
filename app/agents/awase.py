@@ -63,6 +63,8 @@ class AwaseAgent:
                     actor=layer_id,
                     action=AuditAction.LOCATION_SHARE_ENABLED,
                     subject_id=awase.awase_id,
+                    # 合わせ内の出来事なので、主催者を含むメンバー全員の記録に出す
+                    layer_ids=[m.layer_id for m in updated.members],
                     payload={
                         "expires_at": (awase.event.ends_at).isoformat(),
                         "scope": "event_day_only",
@@ -102,6 +104,7 @@ class AwaseAgent:
                     actor="awase-agent",
                     action=AuditAction.RESCHEDULE_PROPOSED,
                     subject_id=awase.awase_id,
+                    layer_ids=[m.layer_id for m in awase.members],
                     payload={
                         "proposal_id": proposal.proposal_id,
                         "shoot_id": proposal.shoot_id,
@@ -119,7 +122,7 @@ class AwaseAgent:
                         layer_id=organizer.layer_id,
                         message=(
                             f"【承認待ち】{jst_hm(p.current_start)}の枠を"
-                            f"{jst_hm(p.proposed_start)}へ後ろ倒しする起案があります。{p.reason}"
+                            f"{jst_hm(p.proposed_start)}へうしろにずらす案が出ています。{p.reason}"
                         ),
                         kind=NotificationKind.RESCHEDULE_REQUEST,
                         lang=organizer.lang,
@@ -154,6 +157,7 @@ class AwaseAgent:
                 if approved
                 else AuditAction.RESCHEDULE_REJECTED,
                 subject_id=awase.awase_id,
+                layer_ids=[m.layer_id for m in updated.members],
                 payload={
                     "proposal_id": proposal_id,
                     "shoot_id": decided.shoot_id,

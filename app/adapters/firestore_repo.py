@@ -194,14 +194,25 @@ class FirestoreRepository(RepositoryPort):
         await self._run(self._set, COL_AUDIT, log.log_id, log.model_dump(mode="json"))
         return log
 
-    async def list_audit(self, *, subject_id: str | None = None) -> list[AuditLog]:
+    async def list_audit(
+        self, *, subject_id: str | None = None, layer_id: str | None = None
+    ) -> list[AuditLog]:
         def query() -> list[dict]:
             col = self._db.collection(COL_AUDIT)
+            # 複合インデックスを要らなくするため、絞り込みは等値1つまで。
+            # 残りは Python 側で落とす（他のクエリと同じ方針）
             if subject_id:
                 col = col.where(filter=firestore.FieldFilter("subject_id", "==", subject_id))
+            elif layer_id:
+                col = col.where(
+                    filter=firestore.FieldFilter("layer_ids", "array_contains", layer_id)
+                )
             return [d.to_dict() for d in col.stream()]
 
-        return [AuditLog.model_validate(d) for d in await self._run(query)]
+        logs = [AuditLog.model_validate(d) for d in await self._run(query)]
+        if subject_id and layer_id:
+            logs = [log for log in logs if layer_id in log.layer_ids]
+        return logs
 
     # -- TTL ------------------------------------------------------------
     async def purge_expired(self, *, now: datetime | None = None) -> list[str]:
@@ -212,6 +223,7 @@ class FirestoreRepository(RepositoryPort):
             changed = bool(purged_members)
 
             if awase_domain.should_purge(cleaned, now=now):
+                owners = [m.layer_id for m in cleaned.members]  # 消す前に控える
                 cleaned.members = []
                 cleaned.proposals = []
                 changed = True
@@ -221,6 +233,7 @@ class FirestoreRepository(RepositoryPort):
                         actor="scheduler",
                         action=AuditAction.EXPEDITION_PURGED,
                         subject_id=cleaned.awase_id,
+                        layer_ids=owners,
                         payload={"reason": "ttl", "ttl_at": cleaned.ttl_at.isoformat()},
                     )
                 )
@@ -231,6 +244,7 @@ class FirestoreRepository(RepositoryPort):
                         actor="scheduler",
                         action=AuditAction.LOCATION_SHARE_PURGED,
                         subject_id=cleaned.awase_id,
+                        layer_ids=list(purged_members),
                         payload={"members": purged_members},
                     )
                 )

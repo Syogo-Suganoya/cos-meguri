@@ -4,174 +4,167 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>コスめぐり — レイヤーの一日エージェント</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#141220">
-<link rel="stylesheet" href="/static/style.css?v=3">
+<meta name="theme-color" content="#0b0b10">
+<link rel="stylesheet" href="/static/style.css?v=39">
 </head>
-<body>
-<header class="top">
-  <div class="brand">
-    <span class="mark">◈</span>
-    <h1>コスめぐり</h1>
-  </div>
-  <div class="top-right">
-    <div class="lang-switch">
-      <button class="lang active" data-lang="ja">日本語</button>
-      <button class="lang" data-lang="en">English</button>
-    </div>
-    <button id="btn-bell" class="bell hidden" title="お知らせ">
-      <span>🔔</span><span id="bell-count" class="badge hidden">0</span>
-    </button>
-    <button id="btn-logout" class="ghost hidden">ログアウト</button>
-  </div>
-</header>
+<body class="p-home">
 
-<!-- ログイン -->
-<section id="view-login" class="login">
-  <div class="card login-card">
-    <h2>コス名ではじめる</h2>
-    <p class="note">本名も素顔も預かりません。アカウントはコス名だけで成立します。</p>
-    <div id="auth-warning" class="msg alert hidden"></div>
-
-    <div id="login-firebase" class="hidden">
-      <div class="grid">
-        <label>メールアドレス<input id="fb-email" type="email" autocomplete="username"></label>
-        <label>パスワード<input id="fb-password" type="password" autocomplete="current-password"></label>
-        <label>コス名<input id="fb-handle" maxlength="40" placeholder="レイヤーA"></label>
-      </div>
-      <p class="note">メールアドレスは Firebase Authentication 側にのみ保管され、コスめぐりのデータには保存しません。</p>
-      <div class="actions">
-        <button id="btn-fb-login" class="primary">ログイン</button>
-        <button id="btn-fb-signup">新規登録</button>
-      </div>
+<main>
+  <section class="hero">
+    <!-- 飾りはインクの飛沫。重ねた楕円と飛び散った粒でできている。
+         層ごとにスクロールとポインタで速さを変える（home.js） -->
+    <div class="deco" aria-hidden="true">
+      <svg class="splat splat-acid" data-depth="0.09" viewBox="0 0 200 200">
+        <ellipse cx="98" cy="96" rx="62" ry="54"/>
+        <ellipse cx="60" cy="70" rx="36" ry="42" transform="rotate(-24 60 70)"/>
+        <ellipse cx="140" cy="120" rx="42" ry="31" transform="rotate(18 140 120)"/>
+        <ellipse cx="114" cy="50" rx="27" ry="20" transform="rotate(40 114 50)"/>
+        <ellipse cx="68" cy="140" rx="29" ry="22" transform="rotate(-12 68 140)"/>
+        <circle cx="177" cy="58" r="10"/><circle cx="191" cy="88" r="5"/>
+        <circle cx="28" cy="152" r="8"/><circle cx="14" cy="122" r="4"/>
+        <circle cx="152" cy="180" r="6"/>
+      </svg>
+      <svg class="splat splat-magenta" data-depth="0.24" viewBox="0 0 200 200">
+        <ellipse cx="96" cy="104" rx="56" ry="60"/>
+        <ellipse cx="132" cy="62" rx="38" ry="30" transform="rotate(-30 132 62)"/>
+        <ellipse cx="58" cy="140" rx="34" ry="26" transform="rotate(22 58 140)"/>
+        <ellipse cx="150" cy="140" rx="24" ry="19" transform="rotate(-8 150 140)"/>
+        <circle cx="24" cy="62" r="9"/><circle cx="8" cy="40" r="4"/>
+        <circle cx="182" cy="184" r="7"/><circle cx="118" cy="188" r="4"/>
+      </svg>
+      <span class="ring ring-cyan" data-depth="0.44"></span>
+      <span class="dot dot-violet" data-depth="0.58"></span>
+      <svg class="drop drop-a" data-depth="0.66" viewBox="0 0 60 80"><path d="M30 2 C 46 30, 58 44, 58 54 a28 28 0 0 1-56 0 C2 44, 14 30, 30 2 Z"/></svg>
+      <svg class="drop drop-b" data-depth="0.36" viewBox="0 0 60 80"><path d="M30 2 C 46 30, 58 44, 58 54 a28 28 0 0 1-56 0 C2 44, 14 30, 30 2 Z"/></svg>
+      <svg class="arc" data-depth="0.16" viewBox="0 0 200 104"><path d="M6 100 A94 94 0 0 1 194 100"/></svg>
     </div>
 
-    <div id="login-dev">
-      <div class="grid">
-        <label>コス名<input id="dev-handle" value="レイヤーA" maxlength="40"></label>
+    <div class="hero-text">
+      <p class="eyebrow">レイヤーの一日エージェント</p>
+      <h1 class="hero-title">遠征の<em>ぜんぶ</em>を、<br>ひとつの相談窓口に。</h1>
+      <p class="hero-lead">
+        「9/6のコミケに横浜駅から行きます。大荷物です」。<br>
+        そう書くだけで、メイクの工程から更衣室の時間、帰りの動線までを組み立てます。
+      </p>
+      <div class="hero-chips">
+        <span class="chip">本名も素顔も預かりません</span>
+        <span class="chip">LINEもXも使いません</span>
+        <span class="chip">写真は登録のあとすぐ消します</span>
       </div>
-      <div class="actions">
+      <div class="hero-cta">
         <button id="btn-dev-login" class="primary">はじめる</button>
       </div>
-    </div>
-
-    <div id="login-error" class="out"></div>
-  </div>
-</section>
-
-<!-- 本体 -->
-<main id="view-app" class="hidden">
-  <!-- チャット -->
-  <section class="card chat-card">
-    <h2><span class="step-no">1</span>エージェントに相談する</h2>
-    <p class="note">イベント・日付・作品/キャラ・出発駅・荷物が揃うと、一日ぶんを組み立てます。</p>
-    <div id="chat-log" class="chat-log"></div>
-    <div id="chat-slots" class="slots"></div>
-    <form id="chat-form" class="chat-input">
-      <input id="chat-text" placeholder="例: 9/6のコミケに横浜駅から行きます。大荷物です" autocomplete="off">
-      <button class="primary" type="submit">送信</button>
-      <button id="btn-chat-reset" type="button" class="ghost">やり直す</button>
-    </form>
-  </section>
-
-  <!-- 結果 -->
-  <section class="card hidden" id="sec-result">
-    <h2><span class="step-no">2</span>当日の組み立て</h2>
-    <div class="tabs">
-      <button class="tab active" data-tab="makeup">メイク工程</button>
-      <button class="tab" data-tab="route">動線</button>
-      <button class="tab" data-tab="dressing">更衣室</button>
-      <button class="tab" data-tab="fitting">試着</button>
-      <button class="tab" data-tab="look">完成イメージ</button>
-      <button class="tab" data-tab="voice">音声ガイド</button>
-    </div>
-    <div id="pane-makeup" class="pane"></div>
-    <div id="pane-route" class="pane hidden"></div>
-    <div id="pane-dressing" class="pane hidden"></div>
-    <div id="pane-fitting" class="pane hidden"></div>
-    <div id="pane-look" class="pane hidden">
-      <p class="note">ウィッグ×衣装×メイクの完成予想図を生成します（GMI Cloud）。製作・購入の前に方向性を確かめるためのものです。</p>
-      <div class="grid">
-        <label>要望（任意）<input id="look-note" placeholder="例: 全身、明るい照明で"></label>
-      </div>
-      <div class="actions">
-        <button id="btn-look" class="primary">完成イメージを生成</button>
-      </div>
-      <div id="look-out" class="out"></div>
-    </div>
-    <div id="pane-voice" class="pane hidden">
-      <p class="note">移動中とメイク中は画面を見られません。工程と動線を母語で読み上げます（GMI Cloud）。ボイスクローンは使いません。</p>
-      <div class="actions">
-        <button id="btn-voice-makeup" class="primary">メイク工程を読み上げ</button>
-        <button id="btn-voice-route">動線を読み上げ</button>
-      </div>
-      <div id="voice-out" class="out"></div>
+      <div id="login-error" class="out"></div>
     </div>
   </section>
 
-  <!-- 当日モード -->
-  <section class="card hidden" id="sec-dayof">
-    <h2><span class="step-no">3</span>当日モード（自律進行）</h2>
-    <p class="note">遅延の再計算と撤収アラートは Cloud Scheduler から定期起動し、結果はお知らせ欄に届きます。ここでは時刻を進めて再現します。</p>
+  <!-- メールとパスワードで入る場合だけ出す（本番） -->
+  <section id="view-login" class="card login-card hidden">
+    <h2>メールで入る</h2>
+    <p class="note">メールアドレスは Firebase Authentication だけが持ちます。コスめぐりのデータには残しません。</p>
+    <div class="grid">
+      <label>メールアドレス<input id="fb-email" type="email" autocomplete="username"></label>
+      <label>パスワード<input id="fb-password" type="password" autocomplete="current-password"></label>
+      <label>コス名<input id="fb-handle" maxlength="40" placeholder="レイヤーA"></label>
+    </div>
     <div class="actions">
-      <button id="btn-dayof">いまの状況を確認</button>
-      <button id="btn-dayof-teardown">撤収アラート時刻まで進める</button>
+      <button id="btn-fb-login" class="primary">入る</button>
+      <button id="btn-fb-signup">はじめて使う</button>
     </div>
-    <div id="dayof-out" class="out"></div>
-  </section>
-
-  <!-- 顔解析 -->
-  <section class="card" id="sec-face">
-    <h2><span class="step-no">4</span>顔を解析する</h2>
-    <p class="note">肌タイプと顔属性の数値だけを保存し、画像は解析後すぐに破棄します。</p>
-    <div class="actions">
-      <button id="btn-face">解析する（画像は即破棄）</button>
-    </div>
-    <div id="face-out" class="out"></div>
-  </section>
-
-  <!-- 合わせ -->
-  <section class="card" id="sec-awase">
-    <h2><span class="step-no">5</span>合わせ（幹事業務）</h2>
-    <p class="note">到着監視とリスケの<strong>起案までが自律</strong>。枠の確定は主催者の承認を通します。</p>
-    <div class="actions">
-      <button id="btn-awase" class="primary">合わせを作って撮影枠を置く</button>
-      <button id="btn-late" disabled>メンバーの到着が遅れる</button>
-      <button id="btn-monitor" disabled>到着監視を走らせる</button>
-      <button id="btn-after-movie" disabled>アフタームービーを作る</button>
-    </div>
-    <div id="awase-out" class="out"></div>
-  </section>
-
-  <!-- 監査 -->
-  <section class="card" id="sec-audit">
-    <h2><span class="step-no">6</span>監査ログ</h2>
-    <p class="note">画像の破棄・位置共有の有効期間・リスケ承認は、すべて証跡が残ります。</p>
-    <div class="actions">
-      <button id="btn-audit">監査ログを見る</button>
-      <button id="btn-purge">TTL削除を実行（イベント終了+24h）</button>
-    </div>
-    <div id="audit-out" class="out"></div>
   </section>
 </main>
 
-<!-- お知らせ -->
-<aside id="inbox" class="inbox hidden">
-  <div class="inbox-head">
-    <h3>お知らせ</h3>
-    <div>
-      <button id="btn-read-all" class="ghost">すべて既読</button>
-      <button id="btn-inbox-close" class="ghost">閉じる</button>
+<!-- できること: 黒地の帯。上下を波で切る -->
+<div class="wave wave-in" aria-hidden="true">
+  <svg viewBox="0 0 1200 90" preserveAspectRatio="none"><path d="M0 90 C 180 10, 340 10, 520 46 C 720 86, 900 20, 1200 58 L1200 90 Z"/></svg>
+</div>
+
+<section class="band">
+  <div class="band-inner">
+    <h2 class="section-title on-dark">こんなときに<span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
+
+    <div class="feature-grid">
+      <article class="feature f-prep">
+        <span class="feature-step">1</span>
+        <span class="ghost-no" aria-hidden="true">01</span>
+        <h3>キャラの色に寄せたいのに、<br>自分の肌だと白浮きする</h3>
+        <p>肌タイプと顔立ちに合わせて、9工程ぶんの手順を書き換えます。肌の明るさ自体は変えず、光と影でキャラの色味に寄せます。</p>
+      </article>
+
+      <article class="feature f-plan">
+        <span class="feature-step">2</span>
+        <span class="ghost-no" aria-hidden="true">02</span>
+        <h3>大荷物なのに、<br>乗換が階段だらけだった</h3>
+        <p>最短ではなくエレベーターで行ける割合が高い順に選びます。階段と乗換は体感の時間に足すので、着く時刻がずれません。</p>
+      </article>
+
+      <article class="feature f-looks">
+        <span class="feature-step">3</span>
+        <span class="ghost-no" aria-hidden="true">03</span>
+        <h3>ウィッグを買ってから、<br>思ってたのと違うと気づく</h3>
+        <p>完成の予想図を先に作ります。作る前・買う前に方向を確かめられます。メイク中は手がふさがるので、工程は読み上げます。</p>
+      </article>
+
+      <article class="feature f-day">
+        <span class="feature-step">4</span>
+        <span class="ghost-no" aria-hidden="true">04</span>
+        <h3>電車が遅れて、<br>合わせの時間に間に合わない</h3>
+        <p>遅れを見て動線を組み直し、撮影の時間をずらす案まで出します。決めるのは主催者で、勝手には動かしません。</p>
+      </article>
+
+      <article class="feature f-privacy">
+        <span class="feature-step">5</span>
+        <span class="ghost-no" aria-hidden="true">05</span>
+        <h3>顔写真を預けるのが、<br>そもそも不安</h3>
+        <p>顔は数値だけを残して写真はすぐ消します。位置はイベントの当日だけ共有し、終わって24時間で自動的に消えます。</p>
+      </article>
     </div>
   </div>
-  <div id="inbox-list" class="inbox-list"></div>
-</aside>
+</section>
 
-<footer>
-  <p>顔画像は解析後に破棄。位置共有はイベント当日限定で、終了24時間後に自動削除されます。</p>
-  <p id="providers" class="providers"></p>
-</footer>
+<!-- 黒い帯の下は、インクが垂れた形で切る -->
+<div class="drip" aria-hidden="true">
+  <svg viewBox="0 0 1200 70" preserveAspectRatio="none">
+    <rect width="1200" height="18"/>
+    <ellipse cx="70" cy="18" rx="34" ry="30"/>
+    <ellipse cx="196" cy="18" rx="26" ry="52"/>
+    <ellipse cx="330" cy="18" rx="40" ry="22"/>
+    <ellipse cx="470" cy="18" rx="28" ry="42"/>
+    <ellipse cx="612" cy="18" rx="46" ry="26"/>
+    <ellipse cx="740" cy="18" rx="24" ry="56"/>
+    <ellipse cx="872" cy="18" rx="38" ry="24"/>
+    <ellipse cx="1010" cy="18" rx="30" ry="46"/>
+    <ellipse cx="1140" cy="18" rx="42" ry="28"/>
+    <circle cx="264" cy="60" r="7"/>
+    <circle cx="536" cy="66" r="5"/>
+    <circle cx="806" cy="58" r="8"/>
+    <circle cx="1078" cy="64" r="5"/>
+  </svg>
+</div>
 
-<script src="/static/app.js?v=3"></script>
+<!-- 対応イベントのリボン。帯だけを画面の外へ逃がし、文字は切らない -->
+<div class="ribbon">
+  <p class="ribbon-inner">
+    <span>コミックマーケット</span><i aria-hidden="true">◆</i><span>acosta!</span><i aria-hidden="true">◆</i><span>世界コスプレサミット</span><i aria-hidden="true">◆</i><span>ホココス</span>
+  </p>
+</div>
+
+<main class="lower">
+  <section class="howto">
+    <h2 class="section-title">使い方<span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
+    <ol class="howto-list">
+      <li><b>コス名で入る。</b>メールも本名もいりません（本番はメールとパスワードで入ります）。</li>
+      <li><b>「AIに相談」に書く。</b>イベント・日付・作品/キャラ・出発駅・荷物。足りないぶんは聞き返します。</li>
+      <li><b>できたプランを各ページで見る。</b>「AIに相談」はどのページでも開いたままです。書き足せばその場で組み直します。</li>
+      <li><b>当日は開いておく。</b>遅れや片づけの時間は、お知らせ欄に届きます。</li>
+    </ol>
+  </section>
+
+</main>
+
+<script type="module" src="/static/js/pages/home.js?v=39"></script>
 </body>
 </html>

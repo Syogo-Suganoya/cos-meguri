@@ -599,6 +599,7 @@ async def api_update_progress(
                 actor=layer.layer_id,
                 action=AuditAction.PROGRESS_UPDATED_BY_ORGANIZER,
                 subject_id=awase_id,
+                layer_ids=[layer.layer_id, target_id],
                 payload={"target": target_id, "progress": body.progress.value},
             )
         )
@@ -714,7 +715,15 @@ async def api_audit(
     agents: AgentBundle = Depends(get_agents),
     layer: Layer = Depends(current_layer),
 ) -> dict:
-    logs = await agents.repository.list_audit(subject_id=subject_id)
+    """自分に関わる記録だけを返す。
+
+    以前は絞り込みなしで全レイヤーぶんを返していた。記録は本人が自分の
+    データの扱いを確かめるためのものなので、他人ぶんは見せない。
+    """
+    logs = await agents.repository.list_audit(
+        subject_id=subject_id, layer_id=layer.layer_id
+    )
+    logs.sort(key=lambda log: log.created_at, reverse=True)
     return {"logs": [log.model_dump(mode="json") for log in logs]}
 
 

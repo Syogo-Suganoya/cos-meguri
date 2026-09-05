@@ -26,7 +26,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "dressing.entry": {"ja": "入場のおすすめ", "en": "Suggested entry"},
     "dressing.exit": {"ja": "撤収のおすすめ", "en": "Suggested exit"},
     "awase.heading": {"ja": "合わせの進捗", "en": "Group progress"},
-    "awase.proposal": {"ja": "リスケ起案（主催者承認待ち）", "en": "Reschedule proposal (awaiting organiser)"},
+    "awase.proposal": {"ja": "時間の変更案（主催者の返事待ち）", "en": "Reschedule proposal (awaiting organiser)"},
     "privacy.note": {
         "ja": "顔画像は解析後に破棄しました。保持しているのは数値スコアのみです。",
         "en": "The face image was discarded after analysis. Only numeric scores are kept.",

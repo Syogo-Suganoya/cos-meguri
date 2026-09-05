@@ -136,7 +136,7 @@ class ChatAgent:
             lines = [
                 f"{exp.event.name}（{exp.event.venue}）の一日を組みました。",
                 f"・メイク {exp.makeup.total_minutes}分／{len(exp.makeup.steps)}工程"
-                f"（Fitzpatrick {exp.makeup.fitzpatrick_type.value} と顔属性で個別化）",
+                f"（肌タイプ {exp.makeup.fitzpatrick_type.value} と顔立ちに合わせています）",
             ]
             if route and route.depart_at:
                 lines.append(
@@ -146,17 +146,17 @@ class ChatAgent:
             if dressing and dressing.recommended_entry:
                 lines.append(
                     f"・更衣室は {jst_hm(dressing.recommended_entry)} 入場、"
-                    f"{jst_hm(dressing.recommended_exit)} 撤収がおすすめ（モデル推定）"
+                    f"{jst_hm(dressing.recommended_exit)} に出るのがおすすめ（予測です）"
                 )
             if extras.get("wake_up_hint"):
                 lines.append(f"・{extras['wake_up_hint']}")
-            lines.append("右の「当日の組み立て」で工程と動線を確認できます。")
+            lines.append("工程と動線は「プラン」のページにまとめました。")
             return "\n".join(lines)
 
         lines = [
             f"Your day at {exp.event.name} ({exp.event.venue}) is ready.",
             f"- Makeup: {exp.makeup.total_minutes} min over {len(exp.makeup.steps)} steps "
-            f"(personalised for Fitzpatrick {exp.makeup.fitzpatrick_type.value} and your facial ratios)",
+            f"(matched to skin type {exp.makeup.fitzpatrick_type.value} and your face)",
         ]
         if route and route.depart_at:
             lines.append(
@@ -166,10 +166,11 @@ class ChatAgent:
         if dressing and dressing.recommended_entry:
             lines.append(
                 f"- Changing room: enter around {jst_hm(dressing.recommended_entry)}, "
-                f"leave by {jst_hm(dressing.recommended_exit)} (model estimate)"
+                f"leave by {jst_hm(dressing.recommended_exit)} (estimated)"
             )
         if extras.get("wake_up_hint"):
             lines.append(f"- {extras['wake_up_hint']}")
+        lines.append("The steps and the route are on the Plan page.")
         return "\n".join(lines)
 
     async def reset(self, layer: Layer) -> ChatSession:

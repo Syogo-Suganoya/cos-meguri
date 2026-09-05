@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -71,9 +71,24 @@ async def healthz() -> dict:
     }
 
 
+class RevalidatingStaticFiles(StaticFiles):
+    """毎回 ETag で確かめてから使わせる。
+
+    JS モジュールは URL にバージョンを付けられない（import 側にも書く羽目になる）。
+    Cache-Control が無いとブラウザが独自の判断で握り込み、デプロイしても
+    古いモジュールのまま動く。中身が変わっていなければ 304 で済むので、
+    電波の悪い会場でも負担にならない。
+    """
+
+    def file_response(self, *args, **kwargs):  # type: ignore[override]
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 if WEB_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    app.mount("/static", RevalidatingStaticFiles(directory=WEB_DIR), name="static")
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
@@ -83,7 +98,32 @@ if WEB_DIR.is_dir():
     async def manifest() -> FileResponse:
         return FileResponse(WEB_DIR / "manifest.webmanifest")
 
+    # ブラウザとiOSはルート直下を見にくる。/static/ に置くと拾われない
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def favicon() -> FileResponse:
+        return FileResponse(WEB_DIR / "favicon.svg", media_type="image/svg+xml")
+
+    @app.get("/apple-touch-icon.png", include_in_schema=False)
+    async def apple_touch_icon() -> FileResponse:
+        return FileResponse(WEB_DIR / "apple-touch-icon.png", media_type="image/png")
+
     @app.get("/sw.js", include_in_schema=False)
     async def service_worker() -> FileResponse:
         # PWA の Service Worker はルート直下から配信する必要がある
         return FileResponse(WEB_DIR / "sw.js", media_type="application/javascript")
+
+    # 機能ごとのページ。catch-all にすると /api や /docs の除外が要るうえ、
+    # 打ち間違いが全部200になるので、出すページだけを明示する。
+    PAGES = {
+        "prep": "prep.html",
+        "plan": "plan.html",
+        "looks": "looks.html",
+        "day": "day.html",
+    }
+
+    @app.get("/{page}", include_in_schema=False)
+    async def feature_page(page: str) -> FileResponse:
+        filename = PAGES.get(page)
+        if filename is None:
+            raise HTTPException(status_code=404, detail="not found")
+        return FileResponse(WEB_DIR / "pages" / filename)

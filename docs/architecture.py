@@ -48,7 +48,7 @@ def main() -> None:
         edge_attr=EDGE_ATTR,
     ):
         users = Users("レイヤー\n（コス名のみ）")
-        pwa = Client("PWA（自作UI）\nログイン / チャット / お知らせ")
+        pwa = Client("PWA（自作UI）\n案内トップ＋機能5ページ\n相談チャットは全ページ常駐")
 
         with Cluster("Cloud Run（Docker / python:3.12-slim）", graph_attr={"fontname": FONT}):
             app = Run("FastAPI + Pydantic\nOrchestrator と7エージェント")

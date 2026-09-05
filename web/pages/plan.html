@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>プラン — コスめぐり</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b10">
+<link rel="stylesheet" href="/static/style.css?v=39">
+</head>
+<body class="p-plan">
+
+<main>
+  <h1 class="page-title">プラン</h1>
+  <p class="page-lead">AIとの相談で組み立てた一日ぶん。書き足せば、その場で組み直します。</p>
+
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="makeup">メイクの工程</button>
+      <button class="tab" data-tab="route">動線</button>
+      <button class="tab" data-tab="dressing">更衣室</button>
+    </div>
+    <div id="pane-makeup" class="pane"></div>
+    <div id="pane-route" class="pane hidden"></div>
+    <div id="pane-dressing" class="pane hidden"></div>
+  </section>
+</main>
+
+<script type="module" src="/static/js/pages/plan.js?v=39"></script>
+</body>
+</html>

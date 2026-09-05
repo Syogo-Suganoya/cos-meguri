@@ -683,5 +683,9 @@ class AuditLog(BaseModel):
     actor: str
     action: AuditAction
     subject_id: str | None = None
+    # この記録が「誰のこと」か。actor はエージェント名のことがあり（fitting-agent /
+    # scheduler など）、subject_id も遠征IDや合わせIDが入るので、持ち主だけは
+    # 独立して持つ。記録の一覧を本人ぶんに絞るのに使う。
+    layer_ids: list[str] = Field(default_factory=list)
     payload: dict = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)

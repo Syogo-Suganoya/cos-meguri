@@ -69,6 +69,7 @@ class VoiceAgent:
                         actor="voice-agent",
                         action=AuditAction.VOICE_CLONE_BLOCKED,
                         subject_id=layer_id,
+                        layer_ids=[layer_id],
                         payload={"reasons": guard.reasons},
                     )
                 )
@@ -83,6 +84,7 @@ class VoiceAgent:
                     actor=layer_id,
                     action=AuditAction.MEDIA_GENERATED,
                     subject_id=expedition.exp_id,
+                    layer_ids=[layer_id],
                     payload={
                         "kind": asset.kind.value,
                         "section": section,

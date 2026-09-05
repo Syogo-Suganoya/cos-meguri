@@ -107,6 +107,7 @@ class VisualAgent:
                     actor="visual-agent",
                     action=AuditAction.IP_GUARD_BLOCKED,
                     subject_id=layer_id,
+                    layer_ids=[layer_id],
                     payload={"reasons": guard.reasons, "surface": "media"},
                 )
             )
@@ -119,6 +120,7 @@ class VisualAgent:
                 actor=layer_id,
                 action=AuditAction.MEDIA_GENERATED,
                 subject_id=subject_id,
+                layer_ids=[layer_id],
                 payload={
                     "kind": asset.kind.value,
                     "provider": asset.provider,

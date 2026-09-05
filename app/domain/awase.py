@@ -123,8 +123,8 @@ def propose_reschedule(
         proposed_start=proposed,
         delay_minutes=delay,
         reason=(
-            f"{handles}の到着見込みが枠開始{SETUP_BUFFER_MINUTES}分前に間に合わないため、"
-            f"{delay}分後ろ倒しを起案します（確定には主催者の承認が必要です）"
+            f"{handles}が枠のはじまる{SETUP_BUFFER_MINUTES}分前に間に合いません。"
+            f"{delay}分うしろにずらす案です（決めるのは主催者です）"
         ),
         blocking_members=[m.layer_id for m in blockers],
     )

@@ -498,4 +498,5 @@ gcloud run services update-traffic cos-meguri --to-revisions=REVISION_NAME=100
 | 完成イメージ・音声が 502 | GMI の生成失敗か時間切れ。ログに `gmi ...` の警告が出る |
 | 生成物が「モック」表示のまま | `GMI_API_KEY` が入っていない（`/healthz` の warnings に出る） |
 | ビルドが失敗 | Cloud Build のログ。`pyproject.toml` の依存解決で落ちていることが多い |
-| 画面が古いまま | `web/` を変えたら `index.html` のクエリ（`?v=`）と `sw.js` の `CACHE` 名を上げる |
+| 画面が古いまま | `web/` を変えたら `sw.js` の `CACHE` 名を上げる。CSS は各HTMLのクエリ（`?v=`）と `SHELL` も揃える |
+| ページが404 | `main.py` の `PAGES` に入っているか。HTML・ルート・`sw.js` の `SHELL` は3つセットで直す |

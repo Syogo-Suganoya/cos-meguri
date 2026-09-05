@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
+
 from app.domain.models import JST, LuggageMode
 from app.domain.parsing import extract_slots
 from tests.conftest import DAY
@@ -49,6 +51,38 @@ def test_character_is_read_from_two_phrasings():
 
     b = extract_slots("作品Xのキャラクター太郎のコスをします", EVENTS, now=NOW)
     assert b.get("title") and b.get("character")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "作品は「星のカケラ」でキャラはリリカです",
+        "作品は星のカケラでキャラはリリカ",
+        "作品名：星のカケラ キャラ名：リリカ",
+        "作品「星のカケラ」キャラ「リリカ」",
+        "キャラはリリカ、作品は星のカケラ",
+    ],
+)
+def test_character_drops_particles_and_brackets(text):
+    """語尾の「で」「です」や鉤括弧を作品名・キャラ名に混ぜない。
+
+    値まで1本の正規表現で捕まえていた頃は「星のカケラ」で / リリカです になり、
+    そのままメイク工程の生成に渡っていた。
+    """
+    slots = extract_slots(text, EVENTS, now=NOW)
+    assert (slots.get("title"), slots.get("character")) == ("星のカケラ", "リリカ")
+
+
+def test_series_word_inside_a_title_is_not_a_key():
+    """「作品X」の「作品」はキーではない。直後に区切りが来たときだけキーとみなす。"""
+    slots = extract_slots("作品Xのキャラクター太郎のコスをします", EVENTS, now=NOW)
+    assert slots["title"] == "作品X"
+
+
+def test_title_and_character_can_be_answered_one_at_a_time():
+    """会話は1項目ずつ聞き返すので、片方だけの返事も拾える。"""
+    assert extract_slots("作品名は星のカケラ", EVENTS, now=NOW) == {"title": "星のカケラ"}
+    assert extract_slots("キャラ名はリリカ", EVENTS, now=NOW) == {"character": "リリカ"}
 
 
 # ---------------------------------------------------------------- 会話
@@ -121,3 +155,36 @@ def test_plan_from_chat_matches_the_event_calendar(user):
         res["expedition"]["event"]["starts_at"].replace("Z", "+00:00")
     )
     assert starts_at.astimezone(JST).hour == 10
+
+
+def test_plan_reply_points_at_the_plan_page(user):
+    """案内先はページ名で書く。以前は「右の」と書いていたが、右には何もない。"""
+    user.post(
+        "/api/chat",
+        json={"message": f"{DAY:%-m/%-d}のコミケに横浜駅から行きます。大荷物です"},
+    )
+    res = user.post(
+        "/api/chat", json={"message": "作品は「星のカケラ」でキャラはリリカです"}
+    ).json()
+    reply = res["messages"][-1]["text"]
+    assert "プラン" in reply
+    assert "右の" not in reply
+    # 括弧も語尾も混ざらずにキャラが渡っている
+    assert res["slots"]["title"] == "星のカケラ"
+    assert res["slots"]["character"] == "リリカ"
+
+
+def test_english_plan_reply_also_points_somewhere(login):
+    """英語側には案内文が1つも無かった。"""
+    visitor = login("Visitor")
+    visitor.patch("/api/me", json={"lang": "en"})
+    visitor.post("/api/chat/reset", json={})
+    visitor.post(
+        "/api/chat",
+        json={"message": f"Comic Market on {DAY:%-m/%-d}, 横浜駅から, one suitcase"},
+    )
+    res = visitor.post(
+        "/api/chat", json={"message": "Series: Series A, Character: Char B"}
+    ).json()
+    assert res["slots"]["title"] == "Series A"
+    assert "Plan page" in res["messages"][-1]["text"]

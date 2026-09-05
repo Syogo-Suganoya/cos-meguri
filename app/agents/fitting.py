@@ -46,6 +46,7 @@ class FittingAgent:
                 actor="fitting-agent",
                 action=AuditAction.FACE_IMAGE_DISCARDED,
                 subject_id=layer_id,
+                layer_ids=[layer_id],
                 payload={
                     "provider": self.vto.name,
                     "retained": ["fitzpatrick_type", "face_attributes"],
@@ -75,6 +76,7 @@ class FittingAgent:
                         actor="fitting-agent",
                         action=AuditAction.IP_GUARD_BLOCKED,
                         subject_id=layer_id,
+                        layer_ids=[layer_id],
                         payload={"reasons": guard.reasons},
                     )
                 )
@@ -100,6 +102,7 @@ class FittingAgent:
                     actor="fitting-agent",
                     action=AuditAction.FITTING_IMAGE_DISCARDED,
                     subject_id=layer_id,
+                    layer_ids=[layer_id],
                     payload={"provider": self.vto.name, "candidates": len(candidates)},
                 )
             )

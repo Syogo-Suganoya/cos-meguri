@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>準備 — コスめぐり</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b10">
+<link rel="stylesheet" href="/static/style.css?v=39">
+</head>
+<body class="p-prep">
+
+<main>
+  <h1 class="page-title">準備</h1>
+  <p class="page-lead">顔を登録すると、メイクの工程があなたに合います。試着の候補はプランを組むと出ます。</p>
+
+  <section class="card">
+    <h2>コス名</h2>
+    <p class="note">合わせに呼ばれるときの名前です。いつでも変えられます。最初の名前は端末ごとに自動でつけた仮のものです。</p>
+    <div class="grid">
+      <label>コス名<input id="handle" maxlength="40" placeholder="例: ミナト"></label>
+    </div>
+    <div class="actions">
+      <button id="btn-handle" class="primary">この名前にする</button>
+    </div>
+    <div id="handle-out" class="out"></div>
+  </section>
+
+  <section class="card">
+    <h2>顔を登録する</h2>
+    <p class="note">写真は登録のあとすぐ消します。残すのは肌タイプと顔立ちの数値だけで、消したことも記録に残ります。</p>
+    <div class="actions">
+      <button id="btn-face" class="primary">登録する（写真はすぐ消します）</button>
+    </div>
+    <div id="face-out" class="out"></div>
+  </section>
+
+  <section class="card">
+    <h2>試着してみる</h2>
+    <p class="note">キャラに寄せたウィッグと衣装の候補を出します。どれにするかを決めるのはあなたです。</p>
+    <div id="fitting-out" class="out"></div>
+  </section>
+</main>
+
+<script type="module" src="/static/js/pages/prep.js?v=39"></script>
+</body>
+</html>
