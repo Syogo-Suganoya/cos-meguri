@@ -116,7 +116,6 @@ if WEB_DIR.is_dir():
         "login": "login.html",
         "prep": "prep.html",
         "plan": "plan.html",
-        "looks": "looks.html",
         "day": "day.html",
     }
 

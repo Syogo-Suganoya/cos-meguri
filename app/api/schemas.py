@@ -143,27 +143,6 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
-# ---------------------------------------------------------------- 生成メディア
-
-
-class LookImageRequest(BaseModel):
-    """完成イメージ（設計書 §11）。要望は自由文で受け、ガードレールを通す。"""
-
-    request_note: str = Field(default="", max_length=500)
-
-
-class VoiceGuideRequest(BaseModel):
-    section: Literal["makeup", "route"] = "makeup"
-    request_note: str = Field(default="", max_length=500)
-
-
-class AfterMovieRequest(BaseModel):
-    # 撮影写真のURL。アップロード機能はMVP外なので、参照だけを受ける
-    image_urls: list[str] = Field(default_factory=list, max_length=8)
-    seconds: int = Field(5, ge=5, le=10)
-    request_note: str = Field(default="", max_length=500)
-
-
 # ---------------------------------------------------------------- 通知
 
 

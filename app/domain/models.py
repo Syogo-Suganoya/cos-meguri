@@ -430,9 +430,6 @@ class Expedition(BaseModel):
     routes: dict[str, RoutePlan] = Field(default_factory=dict)
     dressing: DressingPlan | None = None
     awase_id: str | None = None
-    # 設計書 §11: 完成イメージと音声ガイド（生成できたぶんだけ入る）
-    look_image: MediaAsset | None = None
-    voice_guides: list[MediaAsset] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -514,8 +511,6 @@ class Awase(BaseModel):
     members: list[AwaseMember] = Field(default_factory=list)
     shoots: list[Shoot] = Field(default_factory=list)
     proposals: list[RescheduleProposal] = Field(default_factory=list)
-    # 設計書 §11: 合わせの締めに作るアフタームービー
-    after_movie: MediaAsset | None = None
     created_at: datetime = Field(default_factory=utcnow)
 
     @property
@@ -533,47 +528,6 @@ class Awase(BaseModel):
 
 
 # ---------------------------------------------------------------- 監査
-
-
-class MediaKind(str, Enum):
-    """生成メディアの種別（設計書 §11）。"""
-
-    LOOK_IMAGE = "look_image"  # ウィッグ×衣装×メイクの完成予想図
-    AFTER_MOVIE = "after_movie"  # 合わせのアフタームービー
-    VOICE_GUIDE = "voice_guide"  # メイク工程・動線の音声ガイド
-
-    @property
-    def label_ja(self) -> str:
-        return {
-            MediaKind.LOOK_IMAGE: "完成イメージ",
-            MediaKind.AFTER_MOVIE: "アフタームービー",
-            MediaKind.VOICE_GUIDE: "音声ガイド",
-        }[self]
-
-
-class MediaAsset(BaseModel):
-    """生成された画像・動画・音声。
-
-    バイト列は持たず、参照（URL）と失効時刻だけを保持する。生成物は
-    一時領域に置き、期限を過ぎたら参照ごと捨てる（設計書 §7-1 の一時画像と同じ扱い）。
-    """
-
-    media_id: str
-    kind: MediaKind
-    url: str  # 実運用は一時URL。モックは data URI
-    mime_type: str
-    lang: Lang = Lang.JA
-    seconds: float | None = None  # 音声・動画の長さ
-    # 設計書 §11: 生成物にはAI生成の透かしを入れる
-    watermarked: bool = True
-    provider: str = "mock"
-    # モックの代替物（本物の生成結果ではない）かどうか。UIで隠さず示す
-    is_placeholder: bool = False
-    expires_at: datetime | None = None
-    created_at: datetime = Field(default_factory=utcnow)
-
-    def is_active(self, now: datetime | None = None) -> bool:
-        return self.expires_at is None or (now or utcnow()) < self.expires_at
 
 
 class NotificationKind(str, Enum):

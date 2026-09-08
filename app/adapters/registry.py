@@ -12,14 +12,12 @@ from functools import lru_cache
 from app.adapters.dev_auth import DevAuth
 from app.adapters.in_app_notifier import InAppNotifier
 from app.adapters.memory_repo import MemoryRepository
-from app.adapters.mock_media import MockImage, MockSpeech, MockVideo
 from app.adapters.mock_transit import MockTransit
 from app.adapters.mock_vto import MockVto
 from app.adapters.stub_llm import StubLlm
 from app.config import Settings, get_settings
 from app.ports.auth import AuthPort
 from app.ports.llm import LlmPort
-from app.ports.media import ImagePort, SpeechPort, VideoPort
 from app.ports.notifier import NotifierPort
 from app.ports.repository import RepositoryPort
 from app.ports.transit import TransitPort
@@ -65,23 +63,6 @@ def build_llm(settings: Settings) -> LlmPort:
     return StubLlm()
 
 
-def build_media(settings: Settings) -> tuple[ImagePort, VideoPort, SpeechPort]:
-    """完成イメージ・PV・音声ガイド（設計書 §11）。3つで同じ提供元を共有する。"""
-    if settings.media_mode == "live":
-        if not settings.gmi_api_key:
-            _demote("media", "GMI_API_KEY")
-            return MockImage(), MockVideo(), MockSpeech()
-        from app.adapters.gmi_media import GmiClient, GmiImage, GmiSpeech, GmiVideo
-
-        client = GmiClient(settings.gmi_api_key)
-        return (
-            GmiImage(client, settings.gmi_image_model),
-            GmiVideo(client, settings.gmi_video_model),
-            GmiSpeech(client, settings.gmi_speech_model),
-        )
-    return MockImage(), MockVideo(), MockSpeech()
-
-
 def build_repository(settings: Settings) -> RepositoryPort:
     if settings.repository == "firestore":
         from app.adapters.firestore_repo import FirestoreRepository
@@ -118,7 +99,6 @@ class Adapters:
         self.transit = build_transit(settings)
         self.llm = build_llm(settings)
         self.repository = build_repository(settings)
-        self.image, self.video, self.speech = build_media(settings)
         # 通知はアプリ内で完結するので差し替え先が無い。保存先だけが変わる
         self.notifier = InAppNotifier(self.repository)
         self.auth = build_auth(settings)
@@ -131,9 +111,6 @@ class Adapters:
             "notifier": self.notifier.name,
             "repository": self.repository.name,
             "auth": self.auth.name,
-            "image": self.image.name,
-            "video": self.video.name,
-            "speech": self.speech.name,
         }
 
 

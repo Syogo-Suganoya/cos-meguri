@@ -11,7 +11,6 @@ services:
       VTO_MODE: ${VTO_MODE:-mock}                 # mock | live (YouCam)
       TRANSIT_MODE: ${TRANSIT_MODE:-mock}         # mock | live (駅すぱあと MCP)
       LLM_MODE: ${LLM_MODE:-mock}                 # mock | live (Gemini)
-      MEDIA_MODE: ${MEDIA_MODE:-mock}             # mock | live (GMI Cloud)
       REPOSITORY: ${REPOSITORY:-firestore}        # firestore | memory（memory はテスト専用）
       # 認証。dev はパスワード検証なしのローカル専用
       AUTH_MODE: ${AUTH_MODE:-dev}                # dev | firebase
@@ -27,10 +26,6 @@ services:
       EKISPERT_MCP_URL: ${EKISPERT_MCP_URL:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
-      GMI_API_KEY: ${GMI_API_KEY:-}
-      GMI_IMAGE_MODEL: ${GMI_IMAGE_MODEL:-seedream-5-0-pro}
-      GMI_VIDEO_MODEL: ${GMI_VIDEO_MODEL:-Kling-Image2Video-V2.1-Pro}
-      GMI_SPEECH_MODEL: ${GMI_SPEECH_MODEL:-minimax-tts-speech-2.8-hd}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-cos-meguri-local}
       # ローカルは常にエミュレータを見る。本番では未設定にして実 Firestore に繋ぐ
       FIRESTORE_EMULATOR_HOST: ${FIRESTORE_EMULATOR_HOST:-firestore:8200}

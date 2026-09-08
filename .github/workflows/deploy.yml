@@ -88,7 +88,6 @@ jobs:
             VTO_MODE=live
             TRANSIT_MODE=live
             LLM_MODE=live
-            MEDIA_MODE=live
             GOOGLE_CLOUD_PROJECT=cos-meguri
             FIREBASE_PROJECT_ID=cos-meguri
             FIREBASE_WEB_API_KEY=${{ vars.FIREBASE_WEB_API_KEY }}
@@ -99,7 +98,6 @@ jobs:
             YOUCAM_API_KEY=YOUCAM_API_KEY:latest
             YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest
             EKISPERT_API_KEY=EKISPERT_API_KEY:latest
-            GMI_API_KEY=GMI_API_KEY:latest
           flags: >-
             --allow-unauthenticated
             --service-account=${{ env.RUN_SERVICE_ACCOUNT }}

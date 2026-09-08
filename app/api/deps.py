@@ -16,8 +16,6 @@ from app.agents.i18n import I18nAgent
 from app.agents.makeup import MakeupAgent
 from app.agents.orchestrator import Orchestrator
 from app.agents.route import RouteAgent
-from app.agents.visual import VisualAgent
-from app.agents.voice import VoiceAgent
 from app.domain.models import AuditAction, AuditLog, Layer
 from app.ports.auth import AuthError
 
@@ -45,9 +43,6 @@ class AgentBundle:
             notifier=adapters.notifier,
         )
         self.chat = ChatAgent(self.orchestrator, adapters.llm, adapters.repository)
-        # 設計書 §11（GMI Cloud 活用）
-        self.visual = VisualAgent(adapters.image, adapters.video, adapters.repository)
-        self.voice = VoiceAgent(adapters.speech, adapters.repository)
 
     async def resolve_layer(self, token: str, *, handle: str | None = None) -> Layer:
         """トークンを検証し、コス名アカウントを引く（無ければ作る）。

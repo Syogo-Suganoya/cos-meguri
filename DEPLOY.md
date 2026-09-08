@@ -18,7 +18,6 @@ PWA も API も同じ1サービスから配信する。フロント用のホス�
 | Firestore（Native） | レイヤー・遠征・合わせ・お知らせ・チャット・監査ログ |
 | Secret Manager | 外部APIキー |
 | Firebase Authentication | ログイン |
-| GMI Cloud（外部） | 完成イメージ・アフタームービー・音声ガイド |
 | Cloud Logging | 監査ログ（Cloud Run から自動で流れる） |
 
 以下、プロジェクトIDは `cos-meguri`、リージョンは東京（`asia-northeast1`）を前提に書く。
@@ -94,7 +93,6 @@ printf '%s' 'YOUR_GEMINI_API_KEY' | gcloud secrets create GOOGLE_API_KEY --data-
 printf '%s' 'YOUR_YOUCAM_API_KEY' | gcloud secrets create YOUCAM_API_KEY --data-file=-
 printf '%s' 'YOUR_YOUCAM_SECRET' | gcloud secrets create YOUCAM_SECRET_KEY --data-file=-
 printf '%s' 'YOUR_EKISPERT_KEY' | gcloud secrets create EKISPERT_API_KEY --data-file=-
-printf '%s' 'YOUR_GMI_API_KEY' | gcloud secrets create GMI_API_KEY --data-file=-
 ```
 
 `printf` を使うのは、`echo` だと末尾の改行までシークレットに入ってしまうため。
@@ -125,8 +123,8 @@ gcloud run deploy cos-meguri \
   --region asia-northeast1 \
   --service-account cos-meguri-run@cos-meguri.iam.gserviceaccount.com \
   --allow-unauthenticated \
-  --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,VTO_MODE=live,TRANSIT_MODE=live,LLM_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,MEDIA_MODE=live,EKISPERT_MCP_URL=https://YOUR_MCP_HOST" \
-  --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUCAM_API_KEY=YOUCAM_API_KEY:latest,YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest,GMI_API_KEY=GMI_API_KEY:latest"
+  --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,VTO_MODE=live,TRANSIT_MODE=live,LLM_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,EKISPERT_MCP_URL=https://YOUR_MCP_HOST" \
+  --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUCAM_API_KEY=YOUCAM_API_KEY:latest,YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest"
 ```
 
 ポイント:
@@ -198,7 +196,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 
 1. **Secret Manager** → 「シークレットを作成」
 2. 名前に `GOOGLE_API_KEY`、値に Gemini の APIキーを貼る → 「シークレットを作成」
-3. 同様に `YOUCAM_API_KEY` / `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` / `GMI_API_KEY` を作る
+3. 同様に `YOUCAM_API_KEY` / `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` を作る
 
 > 値を貼るときは末尾に改行や空白が入らないよう注意する（コピー時に混入しやすい）。
 
@@ -228,7 +226,6 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
      | `VTO_MODE` | `live` |
      | `TRANSIT_MODE` | `live` |
      | `LLM_MODE` | `live` |
-     | `MEDIA_MODE` | `live` |
      | `GOOGLE_CLOUD_PROJECT` | `cos-meguri` |
      | `FIREBASE_PROJECT_ID` | `cos-meguri` |
      | `FIREBASE_WEB_API_KEY` | 手順4で控えた apiKey |
@@ -236,7 +233,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
      | `EKISPERT_MCP_URL` | MCPサーバーのURL |
 
    - 同じタブの「シークレットを参照」で、`GOOGLE_API_KEY` / `YOUCAM_API_KEY` /
-     `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` / `GMI_API_KEY` を
+     `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` を
      **環境変数として** 公開する（バージョンは `latest`）
 6. 「作成」
 
@@ -397,8 +394,6 @@ gcloud run services update-traffic cos-meguri --to-revisions=REVISION_NAME=100
 | Firestore の書き込みが失敗 | 実行サービスアカウントに `roles/datastore.user` が付いているか |
 | 書き込んだデータが見つからない | `FIRESTORE_EMULATOR_HOST` が設定されていないか確認（本番では未設定が正しい） |
 | 再起動でデータが消える | `providers.repository` が `repository:memory` になっている |
-| 完成イメージ・音声が 502 | GMI の生成失敗か時間切れ。ログに `gmi ...` の警告が出る |
-| 生成物が「モック」表示のまま | `GMI_API_KEY` が入っていない（`/healthz` の warnings に出る） |
 | ビルドが失敗 | Cloud Build のログ。`pyproject.toml` の依存解決で落ちていることが多い |
 | 画面が古いまま | `web/` を変えたら `sw.js` の `CACHE` 名を上げる。CSS は各HTMLのクエリ（`?v=`）と `SHELL` も揃える |
 | ページが404 | `main.py` の `PAGES` に入っているか。HTML・ルート・`sw.js` の `SHELL` は3つセットで直す |

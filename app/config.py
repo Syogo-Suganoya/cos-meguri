@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     vto_mode: Mode = "mock"  # YouCam（試着・肌タイプ・顔属性）
     transit_mode: Mode = "mock"  # 駅すぱあと MCP
     llm_mode: Mode = "mock"  # Gemini
-    media_mode: Mode = "mock"  # GMI Cloud（完成イメージ・PV・音声ガイド）
     # データは Firestore に置く。memory はテスト専用（プロセスが死ぬと消える）
     repository: Literal["memory", "firestore"] = "firestore"
 
@@ -34,7 +33,6 @@ class Settings(BaseSettings):
     firebase_web_api_key: str = ""
     # HS256 の推奨長（32バイト以上）を満たす既定値。開発用なので公開されていてよい
     dev_auth_secret: str = "cos-meguri-local-development-secret-key-0001"
-
 
     @property
     def is_local(self) -> bool:
@@ -49,11 +47,6 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     gemini_model: str = "gemini-3.7-flash"
 
-    # GMI Cloud（設計書 §11）。モデルIDは提供側の表記に合わせて上書きできる
-    gmi_api_key: str = ""
-    gmi_image_model: str = "seedream-5-0-pro"
-    gmi_video_model: str = "Kling-Image2Video-V2.1-Pro"
-    gmi_speech_model: str = "minimax-tts-speech-2.8-hd"
 
     google_cloud_project: str = "cos-meguri-local"
     firestore_emulator_host: str = ""

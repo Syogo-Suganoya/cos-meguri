@@ -61,7 +61,6 @@
 .p-login   { --hue: var(--c1); --on: var(--c1-on); }
 .p-prep    { --hue: var(--c1); --on: var(--c1-on); }
 .p-plan    { --hue: var(--c2); --on: var(--c2-on); }
-.p-looks   { --hue: var(--c3); --on: var(--c3-on); }
 .p-day     { --hue: var(--c4); --on: var(--c4-on); }
 
 /* ---------------------------------------------------------------- 2. 地 */
@@ -233,7 +232,6 @@ body {
 
 .rail-step[data-step="prep"]    { --sc: var(--c1); --sc-on: var(--c1-on); }
 .rail-step[data-step="plan"]    { --sc: var(--c2); --sc-on: var(--c2-on); }
-.rail-step[data-step="looks"]   { --sc: var(--c3); --sc-on: var(--c3-on); }
 .rail-step[data-step="day"]     { --sc: var(--c4); --sc-on: var(--c4-on); }
 
 .rail-step:hover { background: var(--ink); color: var(--paper); }
@@ -630,16 +628,6 @@ button.ghost:hover { transform: none; box-shadow: none; background: var(--ink); 
 .bar.rec .time { background: var(--accent); border: var(--edge); text-align: center; }
 .bar.rec .fill { background: var(--accent); }
 
-.look {
-  display: block;
-  width: 100%;
-  max-width: 330px;
-  border: var(--edge);
-  border-radius: var(--r-chip);
-  box-shadow: var(--pop);
-  margin-top: 6px;
-}
-.voice { width: 100%; margin-top: 6px; }
 
 footer {
   border-top: var(--edge);
@@ -969,20 +957,8 @@ footer {
 }
 .f-plan::after { display: none; }
 
-/* 3枚目: 左の縁に縦の筋。上下に粒が跳ねる */
-.f-looks::before {
-  left: -14px; top: 64px; width: 58px; height: 178px;
-  border-radius: 60% 40% 44% 56% / 30% 70% 30% 70%;
-  transform: rotate(6deg);
-}
-.f-looks::after {
-  right: 34px; top: 96px; width: 20px; height: 18px;
-  border-radius: 50%;
-  box-shadow: -18px 54px 0 2px currentColor, 14px 104px 0 -6px currentColor, -6px 152px 0 4px currentColor;
-  opacity: 0.13;
-}
 
-/* 4枚目: 中央を斜めに横切る太い一本 */
+/* 3枚目: 中央を斜めに横切る太い一本 */
 .f-day::before {
   left: 10%; top: 40%; width: 120%; height: 54px;
   border-radius: 46% 54% 52% 48% / 60% 40% 60% 40%;
@@ -991,7 +967,7 @@ footer {
 }
 .f-day::after { display: none; }
 
-/* 5枚目: 何も敷かない。1枚くらい素のままがあっていい */
+/* 4枚目: 何も敷かない。1枚くらい素のままがあっていい */
 .f-privacy::before,
 .f-privacy::after { display: none; }
 
@@ -1038,20 +1014,16 @@ footer {
 }
 .f-prep    .feature-step { background: var(--c1); color: var(--c1-on); }
 .f-plan    .feature-step { background: var(--c2); color: var(--c2-on); }
-.f-looks   .feature-step { background: var(--c3); color: var(--c3-on); }
 .f-day     .feature-step { background: var(--c4); color: var(--c4-on); }
 .f-prep    { box-shadow: 9px 9px 0 var(--c1); }
 .f-plan    { box-shadow: 9px 9px 0 var(--c2); }
-.f-looks   { box-shadow: 9px 9px 0 var(--c3); }
 .f-day     { box-shadow: 9px 9px 0 var(--c4); }
 
 
-.f-looks::before   { background: var(--c3); }
 .f-day::before     { background: var(--c4); }
 
 .f-prep::before, .f-prep::after   { background: currentColor; color: var(--c1); }
 .f-plan::before                   { background: currentColor; color: var(--c2); }
-.f-looks::before, .f-looks::after { background: currentColor; color: var(--c3); }
 .f-day::before                    { background: currentColor; color: var(--c4); }
 
 /* ---- 対応イベントのリボン ---- */

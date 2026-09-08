@@ -54,7 +54,6 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 | `VTO_MODE` | ハッシュ由来の決定的な擬似応答 | YouCam API |
 | `TRANSIT_MODE` | 主要駅の静的グラフ | 駅すぱあと MCP |
 | `LLM_MODE` | キーワード抽出・固定文 | Gemini API（`gemini-3.7-flash`） |
-| `MEDIA_MODE` | 表示・再生できる代替物（SVG / WAV） | GMI Cloud（画像・動画・音声） |
 | `REPOSITORY` | — | Firestore（既定）。`memory` はテスト専用 |
 | `AUTH_MODE` | 開発用ログイン（**ローカル専用**） | Firebase Authentication |
 
@@ -98,7 +97,7 @@ app/
 └── api/                HTTP 層
 web/                    PWA（ログイン・チャット・お知らせも自作）
 ├── index.html          トップ（できること・使い方・ログイン）
-├── pages/              prep / plan / looks / day の4画面
+├── pages/              login / prep / plan / day の4画面
 ├── js/core/            全ページ共通（api・認証・枠・チャット・お知らせ・プラン復元）
 └── js/pages/           画面ごとの初期化。1画面1モジュール
 docs/                   アーキテクチャ図の生成スクリプト
@@ -148,12 +147,6 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 **設備情報が取れない区間は保守的に倒す。** 駅すぱあとの応答にEV有無が無い場合、
 「EVなし・階段1」として扱う。大荷物ユーザーには楽観的な既定のほうが危険なため。
 
-**生成メディアは「無くても成立する」ものとして扱う。** 完成イメージ・PV・音声ガイドの
-生成に失敗しても None を返すだけで、遠征プランは壊さない。逆にモックは
-「生成できませんでした」ではなく**実際に表示・再生できる代替物**（SVG / WAV）を返す。
-デモで動線が途切れず、UI 側の実装も検証できるため。モックであることは
-`is_placeholder` で示し、画面にも出す。
-
 **Firestore のクエリは単一フィールドの等値だけに絞る。** 複合条件は複合インデックスの
 作成をデプロイ手順に増やす。件数が小さいうちは1条件で引いて残りを Python 側で絞るほうが、
 運用の手数が少ない（`list_expeditions_on` の status 除外、`list_notifications` の未読絞りが該当）。
@@ -177,9 +170,6 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 | POST | `/api/me/face` | 顔解析。画像は破棄し数値スコアのみ保存 |
 | POST | `/api/expeditions` | 遠征プラン一括生成（試着・メイク・動線・更衣室） |
 | POST | `/api/expeditions/{id}/day-of` | 当日モードを1回進める（利用者の操作用） |
-| POST | `/api/expeditions/{id}/look-image` | 完成イメージの生成（§11） |
-| POST | `/api/expeditions/{id}/voice-guide` | メイク工程・動線の音声ガイド（§11） |
-| POST | `/api/awase/{id}/after-movie` | アフタームービーの生成。主催者のみ（§11） |
 | POST | `/api/fitting` | 試着候補の提案（権利物ガードを通す） |
 | POST | `/api/awase` | 合わせ作成。招集はコス名で行う |
 | POST | `/api/awase/{id}/monitor` | 到着監視＋リスケ起案（確定はしない） |
@@ -277,11 +267,8 @@ docker compose --profile docs run --rm diagram
 
 - **ADK は依存に入れているが、まだ使っていない。** オーケストレータは手書きで、
   エージェント間の受け渡しは Python の関数呼び出し。ADK への載せ替えは `agents/` だけで済む形にしてある
-- **YouCam / 駅すぱあと / GMI Cloud の live アダプタは実APIで未検証。** エンドポイントと
-  レスポンスのキー名は各モジュール先頭の定数に集約してあり、契約確定後はそこだけ直せばよい。
-  GMI のモデルIDは表記ゆれがあるため環境変数でも上書きできる
-- **アフタームービーは1枚目の写真からの image-to-video に留まる。** 複数枚の編集と
-  音楽生成（設計書 §11）は未実装
+- **YouCam / 駅すぱあとの live アダプタは実APIで未検証。** エンドポイントと
+  レスポンスのキー名は各モジュール先頭の定数に集約してあり、契約確定後はそこだけ直せばよい
 - **Firebase Authentication は実プロジェクトで未検証。** ローカルは開発用ログインで通しており、
   `AUTH_MODE=firebase` の経路（Identity Toolkit REST → firebase-admin 検証）はコードのみ
 - **Service Worker の登録は未確認。** `/sw.js` は正しい MIME で配信できているが、

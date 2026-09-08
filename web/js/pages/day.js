@@ -10,7 +10,6 @@ import { eventNames, mountShell, updateRail } from "./../core/shell.js";
 import { focusChat, mountChat } from "./../core/chat.js";
 import { currentAwase, currentExpedition } from "./../core/expedition.js";
 import { refreshInbox } from "./../core/inbox.js";
-import { mediaBadges } from "./../core/media.js";
 import * as store from "./../core/store.js";
 
 const layer = await requireSession();
@@ -154,9 +153,6 @@ function adoptAwase(found) {
   }
 
   const me = awase.members.find((m) => m.layer_id === layer.layer_id);
-  const isOrganizer = Boolean(me?.is_organizer);
-  // アフタームービーを作れるのは主催者だけ（サーバも403で弾く）
-  $("movie-card").classList.toggle("hidden", !isOrganizer);
   // 撮影枠が無いと見はる対象が無い
   $("btn-monitor").disabled = awase.shoots.length === 0;
 
@@ -205,29 +201,6 @@ on("btn-monitor", "click", async () => {
   const p = res.proposals[0];
   proposalId = p.proposal_id;
   renderAwase(res.awase, p, `撮影の時間をずらす案を出しました: ${hhmm(p.current_start)} → ${hhmm(p.proposed_start)}（+${p.delay_minutes}分）`);
-});
-
-on("btn-after-movie", "click", async () => {
-  const out = $("movie-out");
-  const urls = splitHandles($("movie-urls").value).slice(0, 8);
-  if (!urls.length) return msg(out, "写真のURLを1枚以上入れてください。", "error");
-  try {
-    await withBusy($("btn-after-movie"), "つくっています…", async () => {
-      const asset = await api(`/api/awase/${awase.awase_id}/after-movie`, {
-        method: "POST",
-        body: { image_urls: urls, seconds: 5 },
-      });
-      out.innerHTML = `<div class="msg ok">アフタームービーができました ${mediaBadges(asset)}</div>
-        ${
-          asset.mime_type.startsWith("video/")
-            ? `<video class="look" controls src="${esc(asset.url)}"></video>`
-            : `<img class="look" src="${esc(asset.url)}" alt="アフタームービー">`
-        }`;
-      refreshInbox();
-    });
-  } catch (err) {
-    msg(out, err.message, "error");
-  }
 });
 
 function renderAwase(current, proposal, note = "") {

@@ -20,12 +20,11 @@ PAGES = {
     "/login": WEB / "pages" / "login.html",
     "/prep": WEB / "pages" / "prep.html",
     "/plan": WEB / "pages" / "plan.html",
-    "/looks": WEB / "pages" / "looks.html",
     "/day": WEB / "pages" / "day.html",
 }
 
 # 左端のシェブロンの節。shell.js の STEPS と対になる
-STEPS = ["prep", "plan", "looks", "day"]
+STEPS = ["prep", "plan", "day"]
 
 
 @pytest.mark.parametrize("url,path", PAGES.items())

@@ -13,12 +13,6 @@ import { mountInbox, refreshInbox } from "./inbox.js";
 export const STEPS = [
   { key: "prep", href: "/prep", label: "準備", done: ({ layer }) => Boolean(layer?.face_profile) },
   { key: "plan", href: "/plan", label: "プラン", done: ({ exp }) => Boolean(exp?.makeup) },
-  {
-    key: "looks",
-    href: "/looks",
-    label: "できあがり",
-    done: ({ exp }) => Boolean(exp?.look_image || exp?.voice_guides?.length),
-  },
   { key: "day", href: "/day", label: "当日", done: () => Boolean(store.awaseId()) },
 ];
 

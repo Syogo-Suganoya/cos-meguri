@@ -18,14 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.adapters.dev_auth import DevAuth
 from app.agents.fitting import IpGuardBlocked
-from app.agents.visual import IpGuardBlocked as VisualIpGuardBlocked
-from app.agents.voice import VoiceCloneBlocked
 from app.agents.i18n import supported_langs
 from app.agents.orchestrator import PlanRequest
 from app.api.deps import AgentBundle, current_layer, get_agents
 from app.config import get_settings
 from app.api.schemas import (
-    AfterMovieRequest,
     AwaseCreate,
     ChatRequest,
     DecisionIn,
@@ -34,12 +31,10 @@ from app.api.schemas import (
     FaceAnalyzeRequest,
     FittingRequest,
     LayerUpdate,
-    LookImageRequest,
     MarkReadRequest,
     ProgressUpdate,
     SessionRequest,
     ShootCreate,
-    VoiceGuideRequest,
 )
 from app.domain.events import get_event, list_events
 from app.domain.models import (
@@ -395,60 +390,6 @@ async def _owned_expedition(exp_id: str, agents: AgentBundle, layer: Layer) -> E
     return exp
 
 
-@router.post("/expeditions/{exp_id}/look-image")
-async def api_look_image(
-    exp_id: str,
-    body: LookImageRequest,
-    agents: AgentBundle = Depends(get_agents),
-    layer: Layer = Depends(current_layer),
-) -> dict:
-    """完成イメージを生成する（設計書 §11）。キャラ名はプロンプトに入れない。"""
-    exp = await _owned_expedition(exp_id, agents, layer)
-    try:
-        asset = await agents.visual.look_image(
-            layer_id=layer.layer_id, expedition=exp, request_note=body.request_note
-        )
-    except VisualIpGuardBlocked as exc:
-        raise HTTPException(
-            status_code=422, detail={"error": "ip_guard_blocked", "reasons": exc.reasons}
-        )
-    if asset is None:
-        raise HTTPException(status_code=502, detail="完成イメージを生成できませんでした")
-
-    exp.look_image = asset
-    await agents.repository.save_expedition(exp)
-    return asset.model_dump(mode="json")
-
-
-@router.post("/expeditions/{exp_id}/voice-guide")
-async def api_voice_guide(
-    exp_id: str,
-    body: VoiceGuideRequest,
-    agents: AgentBundle = Depends(get_agents),
-    layer: Layer = Depends(current_layer),
-) -> dict:
-    """メイク工程・動線の音声ガイド（設計書 §11）。台本も一緒に返す。"""
-    exp = await _owned_expedition(exp_id, agents, layer)
-    try:
-        asset, script = await agents.voice.guide(
-            layer_id=layer.layer_id,
-            expedition=exp,
-            section=body.section,
-            request_note=body.request_note,
-        )
-    except VoiceCloneBlocked as exc:
-        # 設計書 §11: ボイスクローンは使わない
-        raise HTTPException(
-            status_code=422, detail={"error": "voice_clone_blocked", "reasons": exc.reasons}
-        )
-    if asset is None:
-        raise HTTPException(status_code=502, detail="音声を生成できませんでした")
-
-    exp.voice_guides = [g for g in exp.voice_guides if g.kind is not asset.kind] + [asset]
-    await agents.repository.save_expedition(exp)
-    return {"asset": asset.model_dump(mode="json"), "script": script, "section": body.section}
-
-
 # ---------------------------------------------------------------- 合わせ
 
 
@@ -658,50 +599,6 @@ async def api_decide(
     }
 
 
-@router.post("/awase/{awase_id}/after-movie")
-async def api_after_movie(
-    awase_id: str,
-    body: AfterMovieRequest,
-    agents: AgentBundle = Depends(get_agents),
-    layer: Layer = Depends(current_layer),
-) -> dict:
-    """合わせのアフタームービーを作る（設計書 §11）。
-
-    メンバー全員が写る成果物なので、作れるのは主催者だけにしている。
-    """
-    awase = await _load_awase(awase_id, agents, layer)
-    organizer = awase.organizer
-    if organizer is None or organizer.layer_id != layer.layer_id:
-        raise HTTPException(status_code=403, detail="アフタームービーを作れるのは主催者だけです")
-    if not body.image_urls:
-        raise HTTPException(status_code=400, detail="撮影写真のURLを1枚以上指定してください")
-
-    try:
-        asset = await agents.visual.after_movie(
-            layer_id=layer.layer_id,
-            awase_id=awase_id,
-            image_urls=body.image_urls,
-            title=awase.title,
-            lang=layer.lang,
-            seconds=body.seconds,
-            request_note=body.request_note,
-        )
-    except VisualIpGuardBlocked as exc:
-        raise HTTPException(
-            status_code=422, detail={"error": "ip_guard_blocked", "reasons": exc.reasons}
-        )
-    if asset is None:
-        raise HTTPException(status_code=502, detail="アフタームービーを生成できませんでした")
-
-    awase.after_movie = asset
-    await agents.repository.save_awase(awase)
-    await agents.notifier.broadcast(
-        layer_ids=[m.layer_id for m in awase.members],
-        message=f"「{awase.title}」のアフタームービーができました。",
-        kind=NotificationKind.INFO,
-        awase_id=awase_id,
-    )
-    return asset.model_dump(mode="json")
 
 
 # ---------------------------------------------------------------- 監査
