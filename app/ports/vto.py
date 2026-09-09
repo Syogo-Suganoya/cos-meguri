@@ -16,7 +16,7 @@ from app.domain.models import CharacterRef, FaceProfile, FittingCandidate, Fitti
 
 
 class VtoPort(ABC):
-    name: str = "vto"
+    name: str = "youcam"
 
     @abstractmethod
     async def analyze_face(self, image_bytes: bytes) -> FaceProfile:

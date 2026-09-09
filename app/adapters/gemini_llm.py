@@ -24,7 +24,7 @@ _LANG_NAMES = {"ja": "Japanese", "en": "English", "zh": "Chinese", "ko": "Korean
 
 
 class GeminiLlm(LlmPort):
-    name = "llm:gemini"
+    name = "gemini:live"
 
     def __init__(self, api_key: str, model: str = "gemini-3.7-flash", timeout: float = 20.0) -> None:
         self.api_key = api_key
@@ -43,7 +43,9 @@ class GeminiLlm(LlmPort):
         if json_mode:
             config["response_mime_type"] = "application/json"
         if self.model.startswith("gemini-3"):
-            config["thinking_level"] = "low"
+            # generationConfig の直下ではなく thinkingConfig の中。直下に置くと
+            # 400 "Unknown name thinking_level" で全リクエストが落ちる
+            config["thinkingConfig"] = {"thinkingLevel": "low"}
         return config
 
     async def _generate(self, prompt: str, *, json_mode: bool = False) -> str | None:
@@ -55,12 +57,20 @@ class GeminiLlm(LlmPort):
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 res = await client.post(
                     _ENDPOINT.format(model=self.model),
-                    params={"key": self.api_key},
+                    # キーはヘッダで渡す。?key= にすると httpx が URL ごと
+                    # INFO ログに出し、キーが平文でログに残る
+                    headers={"x-goog-api-key": self.api_key},
                     json=payload,
                 )
                 res.raise_for_status()
                 data = res.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
+        except httpx.HTTPStatusError as exc:
+            # 本文にはモデル名の誤りなど原因が入る。キーは URL に無いので安全
+            logger.warning(
+                "gemini %s: %s", exc.response.status_code, exc.response.text[:400]
+            )
+            return None
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
             logger.warning("gemini call failed: %s", exc)
             return None

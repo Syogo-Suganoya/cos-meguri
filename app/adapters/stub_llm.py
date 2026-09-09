@@ -37,7 +37,7 @@ _CULTURAL_NOTES = {
 
 
 class StubLlm(LlmPort):
-    name = "llm:stub"
+    name = "gemini:stub"
 
     async def interpret_character(self, title: str, name: str, *, lang: str = "ja") -> dict:
         seed = sum(ord(c) for c in f"{title}{name}") if (title or name) else 0

@@ -85,9 +85,9 @@ jobs:
             APP_ENV=production
             AUTH_MODE=firebase
             REPOSITORY=firestore
-            VTO_MODE=live
-            TRANSIT_MODE=live
-            LLM_MODE=live
+            YOUCAM_MODE=live
+            EKISPERT_MODE=live
+            GEMINI_MODE=live
             GOOGLE_CLOUD_PROJECT=cos-meguri
             FIREBASE_PROJECT_ID=cos-meguri
             FIREBASE_WEB_API_KEY=${{ vars.FIREBASE_WEB_API_KEY }}

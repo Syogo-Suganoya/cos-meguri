@@ -37,7 +37,7 @@ def _digest(data: bytes | None) -> int:
 
 
 class MockVto(VtoPort):
-    name = "vto:mock"
+    name = "youcam:mock"
 
     async def analyze_face(self, image_bytes: bytes) -> FaceProfile:
         seed = _digest(image_bytes)
@@ -48,6 +48,7 @@ class MockVto(VtoPort):
             return round(((seed >> shift) % 100) / 100, 2)
 
         profile = FaceProfile(
+            analyzed_by=self.name,
             fitzpatrick_type=skin,
             attributes=FaceAttributes(
                 brow_depth=score(3),

@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 
 
 class LlmPort(ABC):
-    name: str = "llm"
+    name: str = "gemini"
 
     @abstractmethod
     async def interpret_character(self, title: str, name: str, *, lang: str = "ja") -> dict:

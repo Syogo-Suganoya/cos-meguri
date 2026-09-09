@@ -79,8 +79,7 @@ function renderRoute(exp) {
       const legs = r.segments
         .map(
           (s) => `<div class="step"><h4>${esc(s.from_station)} → ${esc(s.to_station)}<span class="min">${s.minutes}分 / ${s.fare_yen}円</span></h4>
-             <p>${esc(s.line)} ${s.has_elevator ? '<span class="pill ok">エレベーターあり</span>' : '<span class="pill warn">エレベーターなし</span>'}
-             ${s.stairs ? `<span class="pill warn">階段${s.stairs}箇所</span>` : ""}</p></div>`
+             <p>${esc(s.line)}</p></div>`
         )
         .join("");
       const baggage = r.effective_minutes - r.base_minutes;
@@ -92,13 +91,12 @@ function renderRoute(exp) {
             `${r.effective_minutes}<small>分</small>`,
             baggage > 0 ? `実際（ふつう ${r.base_minutes}分 ＋ 荷物 ${baggage}分）` : "実際にかかる時間"
           ),
-          fig(`${Math.round(r.elevator_coverage * 100)}<small>%</small>`, "エレベーターで行ける"),
-          fig(`${r.fare_yen.toLocaleString()}<small>円</small>`, `乗換 ${r.transfers}回`),
+          fig(`${r.transfers}<small>回</small>`, "乗換"),
+          fig(`${r.fare_yen.toLocaleString()}<small>円</small>`, "運賃"),
         ],
         `<span class="chip">${dir === "outbound" ? "行き" : "帰り"}</span>`
       )}
       ${legs}
-      ${r.locker_suggestion ? `<div class="msg ok">${esc(r.locker_suggestion)}</div>` : ""}
       ${r.warnings.map((w) => `<div class="msg alert">${esc(w)}</div>`).join("")}`;
     })
     .join("");

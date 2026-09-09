@@ -123,7 +123,7 @@ gcloud run deploy cos-meguri \
   --region asia-northeast1 \
   --service-account cos-meguri-run@cos-meguri.iam.gserviceaccount.com \
   --allow-unauthenticated \
-  --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,VTO_MODE=live,TRANSIT_MODE=live,LLM_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,EKISPERT_MCP_URL=https://YOUR_MCP_HOST" \
+  --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,YOUCAM_MODE=live,EKISPERT_MODE=live,GEMINI_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,EKISPERT_MCP_URL=https://api-mcp.ekispert.jp/mcp" \
   --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUCAM_API_KEY=YOUCAM_API_KEY:latest,YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest"
 ```
 
@@ -149,7 +149,7 @@ curl -s https://SERVICE_URL/healthz
 Firebase の設定が入っていない（起動時のログに警告が出ているはず）。
 
 ```json
-{"status":"ok","env":"production","providers":{"vto":"vto:youcam","transit":"transit:ekispert","llm":"llm:gemini","notifier":"notifier:in_app","repository":"repository:firestore","auth":"auth:firebase"}}
+{"status":"ok","env":"production","providers":{"youcam":"youcam:live","ekispert":"ekispert:live","gemini":"gemini:live","notifier":"notifier:in_app","repository":"repository:firestore","auth":"auth:firebase"}}
 ```
 
 ブラウザで `https://SERVICE_URL/login` を開き、メールアドレス入力の欄が出ていれば
@@ -223,14 +223,14 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
      | `APP_ENV` | `production` |
      | `AUTH_MODE` | `firebase` |
      | `REPOSITORY` | `firestore` |
-     | `VTO_MODE` | `live` |
-     | `TRANSIT_MODE` | `live` |
-     | `LLM_MODE` | `live` |
+     | `YOUCAM_MODE` | `live` |
+     | `EKISPERT_MODE` | `live` |
+     | `GEMINI_MODE` | `live`（下の `GEMINI_MODEL` と1文字違い。取り違えない） |
      | `GOOGLE_CLOUD_PROJECT` | `cos-meguri` |
      | `FIREBASE_PROJECT_ID` | `cos-meguri` |
      | `FIREBASE_WEB_API_KEY` | 手順4で控えた apiKey |
      | `GEMINI_MODEL` | `gemini-3.7-flash` |
-     | `EKISPERT_MCP_URL` | MCPサーバーのURL |
+     | `EKISPERT_MCP_URL` | `https://api-mcp.ekispert.jp/mcp`（固定） |
 
    - 同じタブの「シークレットを参照」で、`GOOGLE_API_KEY` / `YOUCAM_API_KEY` /
      `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` を
@@ -318,7 +318,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 | Secret | `WIF_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github` |
 | Secret | `WIF_SERVICE_ACCOUNT` | `cos-meguri-deployer@cos-meguri.iam.gserviceaccount.com` |
 | Variable | `FIREBASE_WEB_API_KEY` | 手順4で控えた apiKey（公開前提の値なので Variable でよい） |
-| Variable | `EKISPERT_MCP_URL` | MCPサーバーのURL |
+| Variable | `EKISPERT_MCP_URL` | `https://api-mcp.ekispert.jp/mcp`（固定） |
 | Variable | `CD_ENABLED` | `true` ← **これを入れるまでデプロイは走らない** |
 
 **4. トリガーを開ける**

@@ -48,7 +48,7 @@ class FittingAgent:
                 subject_id=layer_id,
                 layer_ids=[layer_id],
                 payload={
-                    "provider": self.vto.name,
+                    "provider": profile.analyzed_by,
                     "retained": ["fitzpatrick_type", "face_attributes"],
                     "image_retained": False,
                 },

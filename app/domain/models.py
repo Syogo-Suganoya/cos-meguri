@@ -120,6 +120,10 @@ class FaceProfile(BaseModel):
     attributes: FaceAttributes = Field(default_factory=FaceAttributes)
     analyzed_at: datetime = Field(default_factory=utcnow)
     source_image_discarded: bool = True
+    # この数値を出した実装（"youcam:live" / "youcam:mock"）。live のアダプタが
+    # 内部でモックに落ちることがあるので、**実際に返した側**を持たせる。
+    # 監査ログはここを読む。アダプタ名を読むと「実APIで解析した」と嘘になる
+    analyzed_by: str = "youcam:mock"
 
 
 # ---------------------------------------------------------------- レイヤー
@@ -141,23 +145,13 @@ class LuggageMode(str, Enum):
         }[self]
 
     @property
-    def stair_penalty_minutes(self) -> int:
-        """階段1箇所あたりの体感ロス（分）。"""
-        return {LuggageMode.LIGHT: 0, LuggageMode.CARRY: 3, LuggageMode.HEAVY: 6}[self]
-
-    @property
     def transfer_penalty_minutes(self) -> int:
         return {LuggageMode.LIGHT: 0, LuggageMode.CARRY: 4, LuggageMode.HEAVY: 8}[self]
-
-    @property
-    def needs_locker(self) -> bool:
-        return self is not LuggageMode.LIGHT
 
 
 class LayerPrefs(BaseModel):
     luggage_mode: LuggageMode = LuggageMode.CARRY
     home_event: str | None = None
-    avoid_stairs: bool = True
     share_location_default: bool = False
 
 
@@ -318,15 +312,17 @@ class MakeupPlan(BaseModel):
 
 
 class RouteSegment(BaseModel):
-    """1区間。大荷物制約の評価に必要な設備情報を持つ。"""
+    """1区間。
+
+    駅設備（エレベータ・階段）は駅すぱあと API に無いので持たない。大荷物の
+    しんどさは「乗換の回数」で測る（乗換のたびに体感時間を足す）。
+    """
 
     from_station: str
     to_station: str
     line: str
     minutes: int
     fare_yen: int = 0
-    has_elevator: bool = True
-    stairs: int = 0  # 階段のみの箇所数
 
 
 class RoutePlan(BaseModel):
@@ -341,8 +337,6 @@ class RoutePlan(BaseModel):
     effective_minutes: int = 0  # 大荷物ペナルティ込み
     fare_yen: int = 0
     transfers: int = 0
-    elevator_coverage: float = 1.0  # 0.0〜1.0
-    locker_suggestion: str | None = None
     warnings: list[str] = Field(default_factory=list)
 
     @property
@@ -623,8 +617,9 @@ class AuditAction(str, Enum):
     EXPEDITION_PURGED = "expedition_purged"  # 同上（いまは誰も書かない）
     ACCOUNT_LINKED = "account_linked"  # 認証IDとコス名アカウントの紐付け
     PROGRESS_UPDATED_BY_ORGANIZER = "progress_updated_by_organizer"
-    MEDIA_GENERATED = "media_generated"  # 完成イメージ・PV・音声の生成（設計書 §11）
-    VOICE_CLONE_BLOCKED = "voice_clone_blocked"  # ボイスクローン依頼の拒否
+    # 生成メディアを取り下げたので、いまは誰も書かない（設計書 §11）。理由は上と同じ
+    MEDIA_GENERATED = "media_generated"
+    VOICE_CLONE_BLOCKED = "voice_clone_blocked"
 
 
 class AuditLog(BaseModel):

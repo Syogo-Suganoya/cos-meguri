@@ -51,11 +51,21 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 
 | 環境変数 | mock（既定） | live |
 |---|---|---|
-| `VTO_MODE` | ハッシュ由来の決定的な擬似応答 | YouCam API |
-| `TRANSIT_MODE` | 主要駅の静的グラフ | 駅すぱあと MCP |
-| `LLM_MODE` | キーワード抽出・固定文 | Gemini API（`gemini-3.7-flash`） |
+| `YOUCAM_MODE` | ハッシュ由来の決定的な擬似応答 | YouCam API |
+| `EKISPERT_MODE` | 主要駅の静的グラフ | 駅すぱあと MCP |
+| `GEMINI_MODE` | キーワード抽出・固定文 | Gemini API（`gemini-3.7-flash`） |
 | `REPOSITORY` | — | Firestore（既定）。`memory` はテスト専用 |
 | `AUTH_MODE` | 開発用ログイン（**ローカル専用**） | Firebase Authentication |
+
+変数名は**使う API の名前**にしてある。`VTO` / `TRANSIT` / `LLM` は業界の略語で、
+何が動くのか名前から分からなかったため。`/healthz` の `providers` もキーを同じ名前に
+揃えてあり、値（`youcam:mock` / `youcam:live`）が変数の実効値になる。
+
+> [!WARNING]
+> **旧名 `VTO_MODE` / `TRANSIT_MODE` / `LLM_MODE` は無効になった。** 設定は
+> `extra="ignore"` なので、古い `.env` を使い続けると**エラーにならず既定の mock に落ちる**。
+> 手元の `.env` を書き換えること。`GEMINI_MODE`（mock/live）と `GEMINI_MODEL`（モデルID）は
+> 1文字違いだが、取り違えると Literal 検証で起動時に落ちるので黙って通ることはない。
 
 `REPOSITORY` だけは他と向きが逆で、**既定が実装（Firestore）側**。ローカルでもエミュレータを
 使い、`memory` はテストだけで使う。プロセスが死ぬと消える保存先を既定にしておくと、
@@ -101,7 +111,7 @@ web/                    PWA（ログイン・チャット・お知らせも自�
 ├── js/core/            全ページ共通（api・認証・枠・チャット・お知らせ・プラン復元）
 └── js/pages/           画面ごとの初期化。1画面1モジュール
 docs/                   アーキテクチャ図の生成スクリプト
-tests/                  ユニット137件＋Firestore結合11件
+tests/                  ユニット116件＋Firestore結合9件
 ```
 
 ### フロントの決めごと
@@ -144,8 +154,12 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 **チャットの「次に何を聞くか」も LLM に委ねない。** 抽出だけを LLM に任せ、
 不足項目の判定と質問はコード側（`agents/chat.py`）が持つ。聞き漏らしと堂々巡りを避けるため。
 
-**設備情報が取れない区間は保守的に倒す。** 駅すぱあとの応答にEV有無が無い場合、
-「EVなし・階段1」として扱う。大荷物ユーザーには楽観的な既定のほうが危険なため。
+**API に無いものは持たない。** 駅設備（エレベータ・階段・コインロッカー）は駅すぱあと API に
+データが無いので、アプリからも扱わない。こちらで埋めると「EVで行ける」と表示しておいて
+実際は階段だった、という一番まずい外し方をする。大荷物のしんどさは**乗換の回数**で測る（乗換1回ごとに体感時間を足す）。
+経路は「大荷物での体感時間が短い順」で選ぶ（`luggage.prefer_easiest`）。
+乗換の少なさを絶対視はしない——直通60分と乗換2回30分なら後者が正しいので、
+乗換の重さはペナルティ側で表現している。
 
 **Firestore のクエリは単一フィールドの等値だけに絞る。** 複合条件は複合インデックスの
 作成をデプロイ手順に増やす。件数が小さいうちは1条件で引いて残りを Python 側で絞るほうが、
@@ -186,14 +200,14 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 docker compose --profile test run --rm test
 ```
 
-ユニット・結合テスト（105件）。インメモリで回るので速い。`conftest.py` が保存先を
+ユニット・結合テスト（116件）。インメモリで回るので速い。`conftest.py` が保存先を
 明示的に `memory` に固定しているため、環境変数の指定漏れで実データベースを触ることはない。
 
 ```bash
 docker compose --profile itest run --rm test-firestore
 ```
 
-Firestore アダプタの結合テスト（11件）。エミュレータに実際に読み書きする。
+Firestore アダプタの結合テスト（9件）。エミュレータに実際に読み書きする。
 **`adapters/firestore_repo.py` を触ったら必ず通すこと。** ここが無いと
 「ローカルでは動くのに本番で壊れる」という一番たちの悪い失敗をする。
 
@@ -267,8 +281,15 @@ docker compose --profile docs run --rm diagram
 
 - **ADK は依存に入れているが、まだ使っていない。** オーケストレータは手書きで、
   エージェント間の受け渡しは Python の関数呼び出し。ADK への載せ替えは `agents/` だけで済む形にしてある
-- **YouCam / 駅すぱあとの live アダプタは実APIで未検証。** エンドポイントと
-  レスポンスのキー名は各モジュール先頭の定数に集約してあり、契約確定後はそこだけ直せばよい
+- **YouCam の live アダプタは実APIで未検証。** エンドポイントとレスポンスのキー名は
+  モジュール先頭の定数に集約してあり、契約確定後はそこだけ直せばよい
+- **駅すぱあと MCP は公式ドキュメントに合わせたが、実キーでの疎通は未確認。**
+  応答の読み取りだけは `tests/test_ekispert.py` がドキュメントの例で検証している。
+  **この MCP に運行情報（遅延）の Tool は無い**ので、REST の
+  `/operationLine/service/rescuenow/information` を直接叩いている。レスキューナウは
+  契約に含まれないことがあり、引けなかったら `supports_disruptions` を False に倒して、
+  当日ページが「乱れなし」ではなく「運行情報は取れていません」と出す。
+  **駅設備（EV・階段・ロッカー）は API 自体に無いので、機能ごと持たない**
 - **Firebase Authentication は実プロジェクトで未検証。** ローカルは開発用ログインで通しており、
   `AUTH_MODE=firebase` の経路（Identity Toolkit REST → firebase-admin 検証）はコードのみ
 - **Service Worker の登録は未確認。** `/sw.js` は正しい MIME で配信できているが、

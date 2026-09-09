@@ -372,6 +372,7 @@ async def api_day_of(
         "exp_id": update.exp_id,
         "route_delay_minutes": update.route_delay_minutes,
         "route_message": update.route_message,
+        "route_checked": update.route_checked,
         "dressing_alert": update.dressing_alert,
         "proposals": update.proposals,
         "notified": update.notified,

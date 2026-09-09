@@ -13,7 +13,11 @@ from app.domain.models import RouteSegment, ServiceDisruption
 
 
 class TransitPort(ABC):
-    name: str = "transit"
+    name: str = "ekispert"
+
+    # 運行情報（遅延）を実データで取れるか。取れない提供元があるので、
+    # 「乱れなし」と「そもそも見ていない」を呼び出し側が区別できるようにする
+    supports_disruptions: bool = True
 
     @abstractmethod
     async def search(
@@ -30,7 +34,3 @@ class TransitPort(ABC):
     @abstractmethod
     async def disruptions(self, lines: list[str]) -> list[ServiceDisruption]:
         """当日の運行障害を返す。"""
-
-    @abstractmethod
-    async def locker_station(self, near_station: str) -> str | None:
-        """大型ロッカーのある最寄り駅を返す。無ければ None。"""

@@ -38,7 +38,10 @@ def test_healthz_reports_providers(client):
     res = client.get("/healthz")
     assert res.status_code == 200
     providers = res.json()["providers"]
-    assert providers["vto"] == "vto:mock"
+    # キーは環境変数と同じ名前、値はその変数の実効値（YOUCAM_MODE=mock で動いている）
+    assert providers["youcam"] == "youcam:mock"
+    assert providers["ekispert"] == "ekispert:mock"
+    assert providers["gemini"] == "gemini:stub"
     assert providers["notifier"] == "notifier:in_app"
     assert providers["auth"] == "auth:dev"
 
@@ -105,8 +108,11 @@ def test_solo_expedition_plan_covers_the_whole_day(user):
     body = _plan(user)
 
     assert body["makeup"]["steps"], "メイク工程が空"
-    assert body["routes"]["outbound"]["effective_minutes"] > body["routes"]["outbound"]["base_minutes"]
-    assert body["routes"]["outbound"]["locker_suggestion"]
+    outbound = body["routes"]["outbound"]
+    assert outbound["segments"], "経路が空"
+    # 大荷物ぶんは乗換の回数にだけ乗る（乗換ゼロなら伸びない）
+    assert outbound["effective_minutes"] >= outbound["base_minutes"]
+    assert outbound["transfers"] == max(len(outbound["segments"]) - 1, 0)
     assert body["dressing"]["is_model_estimate"] is True
     assert body["fitting"]["candidates"]
     assert body["extras"]["wake_up_hint"]
@@ -381,3 +387,17 @@ def test_outsider_cannot_read_an_awase(user, login):
     ).json()
     stranger = login("部外者")
     assert stranger.get(f"/api/awase/{awase['awase_id']}").status_code == 403
+
+
+def test_audit_records_who_actually_analysed_the_face(user):
+    """アダプタ名ではなく、実際に数値を返した実装を残す。
+
+    live のアダプタは実APIが応答しないとモックに落ちる。そこでアダプタ名を
+    書くと「実APIで解析した」という嘘の証跡になる。顔画像の扱いを示す記録なので
+    ここが不正確なのはいちばん筋が悪い。
+    """
+    body = user.post("/api/me/face", json={}).json()
+    assert body["face_profile"]["analyzed_by"] == "youcam:mock"
+
+    discarded = [log for log in body["audit"] if log["action"] == "face_image_discarded"]
+    assert discarded[-1]["payload"]["provider"] == "youcam:mock"

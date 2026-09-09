@@ -1,8 +1,11 @@
 """大荷物制約の経路評価（設計書 §4 動線エージェント）。
 
-一般の経路案内は「身軽な人」を前提にしている。ここでは駅すぱあとから得た
-区間情報に、階段・乗換・エレベータ有無を掛けて体感時間へ引き直す。
-外部APIには依存しない純粋関数群。
+一般の経路案内は「身軽な人」を前提にしている。ここでは乗換の回数を体感時間へ
+引き直す。外部APIには依存しない純粋関数群。
+
+**駅設備（エレベータ・階段・コインロッカー）は扱わない。** 駅すぱあと API に
+そのデータが無く、こちら側で捏造すると大荷物の利用者を危険側に倒すため。
+段差の代わりに「乗換のたびに何分かかる体感か」だけで測る。
 """
 
 from __future__ import annotations
@@ -19,22 +22,10 @@ from app.domain.models import (
 
 
 def effective_minutes(segments: list[RouteSegment], mode: LuggageMode) -> int:
-    """階段・乗換のペナルティを積んだ体感所要時間。"""
+    """乗換のペナルティを積んだ体感所要時間。"""
     base = sum(s.minutes for s in segments)
-    stairs = sum(s.stairs for s in segments)
     transfers = max(len(segments) - 1, 0)
-    return (
-        base
-        + stairs * mode.stair_penalty_minutes
-        + transfers * mode.transfer_penalty_minutes
-    )
-
-
-def elevator_coverage(segments: list[RouteSegment]) -> float:
-    """EV でたどれる区間の割合。1.0 なら段差なしで通せる。"""
-    if not segments:
-        return 1.0
-    return sum(1 for s in segments if s.has_elevator) / len(segments)
+    return base + transfers * mode.transfer_penalty_minutes
 
 
 def build_plan(
@@ -44,7 +35,6 @@ def build_plan(
     mode: LuggageMode,
     arrive_by: datetime | None = None,
     depart_at: datetime | None = None,
-    locker_station: str | None = None,
 ) -> RoutePlan:
     """区間列から大荷物モードの経路プランを組む。
 
@@ -52,7 +42,6 @@ def build_plan(
     """
     base = sum(s.minutes for s in segments)
     eff = effective_minutes(segments, mode)
-    coverage = elevator_coverage(segments)
     transfers = max(len(segments) - 1, 0)
 
     plan = RoutePlan(
@@ -63,7 +52,6 @@ def build_plan(
         effective_minutes=eff,
         fare_yen=sum(s.fare_yen for s in segments),
         transfers=transfers,
-        elevator_coverage=round(coverage, 2),
     )
 
     if arrive_by is not None:
@@ -73,38 +61,33 @@ def build_plan(
         plan.depart_at = depart_at
         plan.arrive_at = depart_at + timedelta(minutes=eff)
 
-    plan.warnings = _warnings(segments, mode, coverage)
-    if mode.needs_locker and locker_station:
-        plan.locker_suggestion = (
-            f"{locker_station}のコインロッカーに大型荷物を預けると、"
-            f"以降の乗換ペナルティが約{transfers * mode.transfer_penalty_minutes}分減ります"
-        )
+    plan.warnings = _warnings(mode, transfers)
     return plan
 
 
-def _warnings(
-    segments: list[RouteSegment], mode: LuggageMode, coverage: float
-) -> list[str]:
+def _warnings(mode: LuggageMode, transfers: int) -> list[str]:
     out: list[str] = []
-    if mode is LuggageMode.LIGHT:
+    if mode is LuggageMode.LIGHT or not transfers:
         return out
-    no_ev = [s for s in segments if not s.has_elevator]
-    if no_ev:
-        names = "・".join(f"{s.from_station}→{s.to_station}" for s in no_ev)
-        out.append(f"エレベータのない乗換があります（{names}）")
-    stairs = sum(s.stairs for s in segments)
-    if stairs:
-        out.append(f"階段が{stairs}箇所。キャリーの持ち上げで+{stairs * mode.stair_penalty_minutes}分見込み")
-    if coverage < 0.6:
-        out.append("EV被覆率が低い経路です。1本後でもEV経路を優先することを推奨します")
+    out.append(
+        f"乗換が{transfers}回。大荷物ぶんで+{transfers * mode.transfer_penalty_minutes}分見込み"
+    )
     return out
 
 
-def prefer_step_free(candidates: list[RoutePlan]) -> list[RoutePlan]:
-    """EV被覆を優先し、同点は体感時間で並べる（設計書 §4「EV優先」）。"""
+def prefer_easiest(candidates: list[RoutePlan]) -> list[RoutePlan]:
+    """大荷物での体感時間が短い順に並べる。
+
+    以前は EV 被覆を第一の軸にしていたが、駅すぱあと API に設備データが無く
+    実データで裏付けられないため取り下げた。
+
+    「乗換の少ない順」にはしない。直通60分と乗換2回30分なら後者を選ぶべきで、
+    乗換の重さは effective_minutes に積んだペナルティで表現されている。
+    こうしておくと、荷物が増えるほど自然に乗換の少ない経路へ寄る。
+    """
     return sorted(
         candidates,
-        key=lambda p: (-p.elevator_coverage, p.effective_minutes, p.fare_yen),
+        key=lambda p: (p.effective_minutes, p.transfers, p.fare_yen),
     )
 
 

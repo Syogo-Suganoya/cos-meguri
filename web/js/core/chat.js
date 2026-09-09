@@ -54,7 +54,7 @@ export function mountChat() {
        <form id="chat-form" class="chat-input">
          <input id="chat-text" placeholder="例: 9/6のコミケに横浜駅から行きます。大荷物です" autocomplete="off">
          <button class="primary" type="submit">送る</button>
-         <button id="btn-chat-reset" type="button" class="ghost">はじめから</button>
+         <button id="btn-chat-reset" type="button" class="chat-reset">はじめから</button>
        </form>
      </aside>`
   );

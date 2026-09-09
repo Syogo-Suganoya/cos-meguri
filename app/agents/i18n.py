@@ -17,7 +17,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "makeup.personalized": {"ja": "この工程の個別化理由", "en": "Why this step is personalised"},
     "route.heading": {"ja": "大荷物モードの動線", "en": "Route (heavy-luggage mode)"},
     "route.penalty": {"ja": "荷物ぶんの上乗せ", "en": "Added for luggage"},
-    "route.locker": {"ja": "ロッカー提案", "en": "Locker suggestion"},
     "dressing.heading": {"ja": "更衣室の混雑予測", "en": "Changing-room forecast"},
     "dressing.estimate": {
         "ja": "実測ではなくモデル値です",

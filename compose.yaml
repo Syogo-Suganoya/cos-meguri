@@ -8,17 +8,15 @@ services:
       PORT: 8080
       APP_ENV: local
       # モック / 実API の差し替えスイッチ（キーが無ければ自動で mock に落ちる）
-      VTO_MODE: ${VTO_MODE:-mock}                 # mock | live (YouCam)
-      TRANSIT_MODE: ${TRANSIT_MODE:-mock}         # mock | live (駅すぱあと MCP)
-      LLM_MODE: ${LLM_MODE:-mock}                 # mock | live (Gemini)
+      YOUCAM_MODE: ${YOUCAM_MODE:-mock}           # 試着・顔解析        mock | live
+      EKISPERT_MODE: ${EKISPERT_MODE:-mock}       # 経路・遅延          mock | live
+      GEMINI_MODE: ${GEMINI_MODE:-mock}           # 言い回し・翻訳      mock | live
       REPOSITORY: ${REPOSITORY:-firestore}        # firestore | memory（memory はテスト専用）
       # 認証。dev はパスワード検証なしのローカル専用
       AUTH_MODE: ${AUTH_MODE:-dev}                # dev | firebase
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
       DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-cos-meguri-local-development-secret-key-0001}
-      # Cloud Scheduler から叩くバッチ用エンドポイントの共有シークレット。
-      # 未設定でもローカルは通るが、本番では設定しないとバッチが閉じる
       # 実APIに差し替えるときだけ設定する
       YOUCAM_API_KEY: ${YOUCAM_API_KEY:-}
       YOUCAM_SECRET_KEY: ${YOUCAM_SECRET_KEY:-}

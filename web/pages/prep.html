@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=42">
+<link rel="stylesheet" href="/static/style.css?v=45">
 </head>
 <body class="p-prep">
 
@@ -30,10 +30,25 @@
 
   <section class="card">
     <h2>顔を登録する</h2>
-    <p class="note">写真は登録のあとすぐ消します。残すのは肌タイプと顔立ちの数値だけで、消したことも記録に残ります。</p>
+    <p class="note">写真は<strong>解析のあとすぐ消します</strong>。残るのは肌タイプと顔立ちの数値だけで、消したことも記録に残ります。明るいところで、正面から、前髪を上げて撮ると精度が上がります。</p>
+
     <div class="actions">
-      <button id="btn-face" class="primary">登録する（写真はすぐ消します）</button>
+      <button id="btn-camera" class="primary">カメラで撮る</button>
+      <button id="btn-pick">ファイルを選ぶ</button>
     </div>
+    <!-- 端末にカメラが無い/許可されない場合は、こちらが受け皿になる -->
+    <input id="face-file" type="file" accept="image/*" class="hidden">
+    <input id="face-capture" type="file" accept="image/*" capture="user" class="hidden">
+
+    <!-- カメラを開いているあいだだけ出す -->
+    <div id="camera-panel" class="camera hidden">
+      <video id="camera-view" class="camera-view" playsinline muted></video>
+      <div class="actions">
+        <button id="btn-shoot" class="primary">これで撮る</button>
+        <button id="btn-camera-cancel">やめる</button>
+      </div>
+    </div>
+
     <div id="face-out" class="out"></div>
   </section>
 
@@ -44,6 +59,6 @@
   </section>
 </main>
 
-<script type="module" src="/static/js/pages/prep.js?v=42"></script>
+<script type="module" src="/static/js/pages/prep.js?v=45"></script>
 </body>
 </html>

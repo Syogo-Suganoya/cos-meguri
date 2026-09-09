@@ -63,6 +63,8 @@ class DayOfUpdate:
     exp_id: str
     route_delay_minutes: int = 0
     route_message: str | None = None
+    # 運行情報を実データで見られたか。False なら「乱れなし」とは言えない
+    route_checked: bool = True
     dressing_alert: str | None = None
     proposals: list[str] = None  # proposal_id の配列
     notified: int = 0
@@ -218,6 +220,7 @@ class Orchestrator:
             exp.routes["outbound"] = updated_route
             update.route_delay_minutes = delay
             update.route_message = message
+            update.route_checked = self.route.transit.supports_disruptions
             if message:
                 await self.notifier.push(
                     layer_id=exp.layer_id,

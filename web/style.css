@@ -596,6 +596,29 @@ button.ghost:hover { transform: none; box-shadow: none; background: var(--ink); 
 .msg.ok { border-left-color: var(--c5); }
 .msg.error { border-left-color: var(--c1); }
 
+/* ---- カメラ（顔の登録） ---- */
+
+.camera {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.camera-view {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--ink);
+  border: var(--edge);
+  border-radius: var(--r-card);
+  box-shadow: var(--pop);
+  /* 内カメラは鏡像のほうが合わせやすい */
+  transform: scaleX(-1);
+}
+.camera .actions { margin-top: 0; }
+
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
 .fit {
   border: var(--edge);
@@ -738,8 +761,31 @@ footer {
 }
 .slot.on { border: var(--edge); background: var(--accent); color: var(--ink); font-weight: 900; }
 
-.chat-input { display: flex; flex-wrap: wrap; gap: 10px; }
+.chat-input { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .chat-input input { flex: 1 1 100%; }
+/* 「送る」が主役。幅を取らせて、押す場所を迷わせない */
+.chat-input button[type="submit"] { flex: 1; }
+
+/* 「はじめから」は会話を消す操作。同じ大きさで並べると誤爆する。
+   ボタンの体裁を外して、脇に小さく置く */
+.chat-reset {
+  flex: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 2px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chat-reset:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+  transform: none;
+  box-shadow: none;
+}
 
 .chat-fab { display: none; }
 

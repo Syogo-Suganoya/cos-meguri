@@ -21,12 +21,6 @@ _HUBS: dict[str, list[tuple[str, str]]] = {
 }
 
 # 大型ロッカーのある駅
-_LOCKERS = {
-    "国際展示場": "新木場",
-    "上前津": "金山",
-    "栄": "名古屋",
-    "池袋": "池袋",
-}
 
 
 def _seed(*parts: str) -> int:
@@ -34,7 +28,7 @@ def _seed(*parts: str) -> int:
 
 
 class MockTransit(TransitPort):
-    name = "transit:mock"
+    name = "ekispert:mock"
 
     async def search(
         self,
@@ -60,8 +54,6 @@ class MockTransit(TransitPort):
                     line="JR線",
                     minutes=18 + seed % 12,
                     fare_yen=220 + (seed % 5) * 30,
-                    has_elevator=True,
-                    stairs=0,
                 ),
                 RouteSegment(
                     from_station=hub,
@@ -69,13 +61,11 @@ class MockTransit(TransitPort):
                     line=line,
                     minutes=9 + seed % 6,
                     fare_yen=180 + (seed % 4) * 20,
-                    has_elevator=True,
-                    stairs=0,
                 ),
             ]
         )
 
-        # 候補2: 直通で速いが階段あり
+        # 候補2: 直通で速いが乗換なし・割高
         routes.append(
             [
                 RouteSegment(
@@ -84,13 +74,11 @@ class MockTransit(TransitPort):
                     line="地下鉄直通",
                     minutes=24 + seed % 8,
                     fare_yen=320 + (seed % 3) * 40,
-                    has_elevator=False,
-                    stairs=2,
                 )
             ]
         )
 
-        # 候補3: 乗換2回・安いが段差多め
+        # 候補3: 乗換2回・安い
         if len(hubs) > 1 and max_routes >= 3:
             hub2, line2 = hubs[1]
             routes.append(
@@ -101,8 +89,6 @@ class MockTransit(TransitPort):
                         line="私鉄線",
                         minutes=15 + seed % 10,
                         fare_yen=190,
-                        has_elevator=True,
-                        stairs=1,
                     ),
                     RouteSegment(
                         from_station=hub2,
@@ -110,8 +96,6 @@ class MockTransit(TransitPort):
                         line=line2,
                         minutes=7,
                         fare_yen=160,
-                        has_elevator=False,
-                        stairs=1,
                     ),
                     RouteSegment(
                         from_station=hubs[0][0],
@@ -119,8 +103,6 @@ class MockTransit(TransitPort):
                         line=hubs[0][1],
                         minutes=8,
                         fare_yen=150,
-                        has_elevator=True,
-                        stairs=0,
                     ),
                 ]
             )
@@ -131,14 +113,11 @@ class MockTransit(TransitPort):
         # 既定では平常運転。当日デモでは DemoTransit 側で遅延を注入する
         return []
 
-    async def locker_station(self, near_station: str) -> str | None:
-        return _LOCKERS.get(near_station)
-
 
 class DemoTransit(MockTransit):
     """デモ用に運行障害を注入できるモック。当日モードの再現に使う。"""
 
-    name = "transit:demo"
+    name = "ekispert:demo"
 
     def __init__(self, injected: list[ServiceDisruption] | None = None) -> None:
         self.injected = injected or []

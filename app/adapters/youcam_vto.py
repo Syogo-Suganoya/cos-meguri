@@ -48,7 +48,7 @@ _ATTRIBUTE_MAP = {
 
 
 class YouCamVto(VtoPort):
-    name = "vto:youcam"
+    name = "youcam:live"
 
     def __init__(self, api_key: str, secret_key: str = "", timeout: float = 30.0) -> None:
         self.api_key = api_key
@@ -70,8 +70,13 @@ class YouCamVto(VtoPort):
                 )
                 res.raise_for_status()
                 return res.json()
+        except httpx.HTTPStatusError as exc:
+            # 画像そのものはログに出さない（設計書 §7-1）。本文は原因の特定に要る
+            logger.warning(
+                "youcam %s: %s %s", path, exc.response.status_code, exc.response.text[:300]
+            )
+            return None
         except (httpx.HTTPError, ValueError) as exc:
-            # 画像そのものはログに出さない（設計書 §7-1）
             logger.warning("youcam %s failed: %s", path, type(exc).__name__)
             return None
 
@@ -85,6 +90,9 @@ class YouCamVto(VtoPort):
 
         fitz = _parse_fitzpatrick(skin)
         profile = FaceProfile(
+            # 片方でも実応答が返っていればここに来る。どちらが欠けたかは
+            # ログに出ているので、名前としては live を刻んでよい
+            analyzed_by=self.name,
             fitzpatrick_type=fitz,
             attributes=_parse_attributes(attrs),
             source_image_discarded=True,

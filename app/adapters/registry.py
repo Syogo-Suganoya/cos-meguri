@@ -26,14 +26,14 @@ from app.ports.vto import VtoPort
 logger = logging.getLogger(__name__)
 
 
-def _demote(provider: str, missing: str) -> None:
-    logger.warning("%s: %s が未設定のため mock で起動します", provider, missing)
+def _demote(mode_var: str, missing: str) -> None:
+    logger.warning("%s=live ですが %s が未設定のため mock で起動します", mode_var, missing)
 
 
 def build_vto(settings: Settings) -> VtoPort:
-    if settings.vto_mode == "live":
+    if settings.youcam_mode == "live":
         if not settings.youcam_api_key:
-            _demote("vto", "YOUCAM_API_KEY")
+            _demote("YOUCAM_MODE", "YOUCAM_API_KEY")
             return MockVto()
         from app.adapters.youcam_vto import YouCamVto
 
@@ -42,9 +42,9 @@ def build_vto(settings: Settings) -> VtoPort:
 
 
 def build_transit(settings: Settings) -> TransitPort:
-    if settings.transit_mode == "live":
+    if settings.ekispert_mode == "live":
         if not settings.ekispert_mcp_url:
-            _demote("transit", "EKISPERT_MCP_URL")
+            _demote("EKISPERT_MODE", "EKISPERT_MCP_URL")
             return MockTransit()
         from app.adapters.ekispert_transit import EkispertTransit
 
@@ -53,9 +53,9 @@ def build_transit(settings: Settings) -> TransitPort:
 
 
 def build_llm(settings: Settings) -> LlmPort:
-    if settings.llm_mode == "live":
+    if settings.gemini_mode == "live":
         if not settings.google_api_key:
-            _demote("llm", "GOOGLE_API_KEY")
+            _demote("GEMINI_MODE", "GOOGLE_API_KEY")
             return StubLlm()
         from app.adapters.gemini_llm import GeminiLlm
 
@@ -105,9 +105,9 @@ class Adapters:
 
     def describe(self) -> dict[str, str]:
         return {
-            "vto": self.vto.name,
-            "transit": self.transit.name,
-            "llm": self.llm.name,
+            "youcam": self.vto.name,
+            "ekispert": self.transit.name,
+            "gemini": self.llm.name,
             "notifier": self.notifier.name,
             "repository": self.repository.name,
             "auth": self.auth.name,

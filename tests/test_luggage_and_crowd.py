@@ -20,16 +20,8 @@ EV_ROUTE = [
     RouteSegment(from_station="A", to_station="B", line="JR線", minutes=20, fare_yen=200),
     RouteSegment(from_station="B", to_station="C", line="地下鉄", minutes=10, fare_yen=180),
 ]
-STAIRS_ROUTE = [
-    RouteSegment(
-        from_station="A",
-        to_station="C",
-        line="直通",
-        minutes=25,
-        fare_yen=320,
-        has_elevator=False,
-        stairs=2,
-    )
+DIRECT_ROUTE = [
+    RouteSegment(from_station="A", to_station="C", line="直通", minutes=32, fare_yen=320),
 ]
 
 
@@ -40,26 +32,30 @@ def test_heavy_luggage_costs_more_than_light():
     assert heavy > light
 
 
-def test_step_free_route_wins_even_when_slower():
-    """所要が長くてもEV経路を選ぶ。大荷物ユーザーの負担順に並べる。"""
+def test_direct_route_wins_when_the_transfer_penalty_outweighs_the_ride():
+    """乗換1回ぶんの負担（+8分）が所要差（2分）を上回るので、直通を選ぶ。
+
+    駅設備（EV・階段）は駅すぱあと API に無いので優劣の軸に使わない。
+    """
     plans = [
         luggage.build_plan(EV_ROUTE, direction="outbound", mode=LuggageMode.HEAVY),
-        luggage.build_plan(STAIRS_ROUTE, direction="outbound", mode=LuggageMode.HEAVY),
+        luggage.build_plan(DIRECT_ROUTE, direction="outbound", mode=LuggageMode.HEAVY),
     ]
-    best = luggage.prefer_step_free(plans)[0]
-    assert best.elevator_coverage == 1.0
+    assert luggage.prefer_easiest(plans)[0].segments == DIRECT_ROUTE
+
+
+def test_a_transfer_is_still_worth_it_when_it_saves_enough_time():
+    """乗換の少なさを絶対視しない。直通が遅すぎれば乗換ありを選ぶ。"""
+    slow_direct = [
+        RouteSegment(from_station="A", to_station="C", line="各停", minutes=60, fare_yen=300)
+    ]
+    plans = [
+        luggage.build_plan(EV_ROUTE, direction="outbound", mode=LuggageMode.HEAVY),
+        luggage.build_plan(slow_direct, direction="outbound", mode=LuggageMode.HEAVY),
+    ]
+    best = luggage.prefer_easiest(plans)[0]
     assert best.segments == EV_ROUTE
-
-
-def test_locker_suggestion_only_when_luggage_is_heavy():
-    heavy = luggage.build_plan(
-        EV_ROUTE, direction="outbound", mode=LuggageMode.HEAVY, locker_station="金山"
-    )
-    light = luggage.build_plan(
-        EV_ROUTE, direction="outbound", mode=LuggageMode.LIGHT, locker_station="金山"
-    )
-    assert heavy.locker_suggestion and "金山" in heavy.locker_suggestion
-    assert light.locker_suggestion is None
+    assert best.transfers == 1
 
 
 def test_arrive_by_backsolves_departure_including_penalty():

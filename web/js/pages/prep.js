@@ -11,11 +11,6 @@ const layer = await requireSession();
 await mountShell({ step: "prep", layer });
 mountChat();
 
-renderFace(layer.face_profile);
-renderFitting(await currentExpedition());
-
-window.addEventListener("cosmeguri:expedition", (e) => renderFitting(e.detail));
-
 // ---- コス名 ----
 
 $("handle").value = layer.handle;
@@ -56,13 +51,109 @@ function renderFace(profile) {
     <div class="msg">このあとプランを組むと、この数値でメイクの工程が変わります。</div>`;
 }
 
-on("btn-face", "click", async () => {
-  // デモでは画像を送らずに登録を通す。実機ではここでカメラ入力を base64 にする
-  const res = await api("/api/me/face", { method: "POST", body: {} });
-  renderFace(res.face_profile);
-  layer.face_profile = res.face_profile;
-  updateRail({ layer }); // 帯の「準備」に印を入れる
+/* 写真の入口は2つ。カメラが使えない端末・許可しない人を締め出さないため、
+   ファイル選択を必ず残す。撮った画像はサーバに送るときだけ存在し、
+   ローカルには一切保存しない（<a download> も localStorage も使わない）。 */
+
+// 送る前に縮める。長辺 720px あれば解析には足り、通信も軽い
+const MAX_EDGE = 720;
+
+/** File/Blob を、向きを保ったまま縮小して data URL にする。 */
+async function toDataUrl(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+/** 解析に出す。画像はここから先へ持ち越さない。 */
+async function submitFace(imageDataUrl) {
+  const out = $("face-out");
+  try {
+    await withBusy($("btn-camera"), "解析しています…", async () => {
+      const res = await api("/api/me/face", {
+        method: "POST",
+        body: { image_b64: imageDataUrl || null },
+      });
+      renderFace(res.face_profile);
+      layer.face_profile = res.face_profile;
+      updateRail({ layer }); // 帯の「準備」に印を入れる
+    });
+  } catch (err) {
+    msg(out, err.message, "error");
+  }
+}
+
+// ---- ファイルを選ぶ ----
+
+on("btn-pick", "click", () => $("face-file").click());
+
+for (const id of ["face-file", "face-capture"]) {
+  on(id, "change", async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 同じ写真をもう一度選べるようにする
+    if (!file) return;
+    try {
+      await submitFace(await toDataUrl(file));
+    } catch {
+      msg($("face-out"), "その画像は読み取れませんでした。別の写真で試してください。", "error");
+    }
+  });
+}
+
+// ---- カメラで撮る ----
+
+let stream = null;
+
+/** 使い終わったら必ず止める。止め忘れるとカメラのランプが点いたままになる。 */
+function closeCamera() {
+  stream?.getTracks().forEach((track) => track.stop());
+  stream = null;
+  $("camera-panel").classList.add("hidden");
+}
+
+on("btn-camera", "click", async () => {
+  // 端末にカメラが無い、または安全でない文脈（http の LAN 越しなど）では
+  // getUserMedia が無い。その場合は capture 付きの入力に投げてOSに任せる
+  if (!navigator.mediaDevices?.getUserMedia) {
+    $("face-capture").click();
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 1280 } },
+      audio: false,
+    });
+  } catch {
+    msg($("face-out"), "カメラを使えませんでした。「ファイルを選ぶ」から写真を渡せます。", "alert");
+    return;
+  }
+  const view = $("camera-view");
+  view.srcObject = stream;
+  await view.play();
+  $("camera-panel").classList.remove("hidden");
+  $("btn-shoot").focus();
 });
+
+on("btn-camera-cancel", "click", closeCamera);
+
+on("btn-shoot", "click", async () => {
+  const view = $("camera-view");
+  const scale = Math.min(1, MAX_EDGE / Math.max(view.videoWidth, view.videoHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(view.videoWidth * scale);
+  canvas.height = Math.round(view.videoHeight * scale);
+  canvas.getContext("2d").drawImage(view, 0, 0, canvas.width, canvas.height);
+  closeCamera(); // 撮った直後に止める。解析を待つあいだ点けっぱなしにしない
+  await submitFace(canvas.toDataURL("image/jpeg", 0.85));
+});
+
+// ページを離れるときも確実に止める
+addEventListener("pagehide", closeCamera);
 
 // ---- 試着 ----
 
@@ -93,3 +184,9 @@ function renderFitting(exp) {
 }
 
 export { msg };
+
+
+// 最初の描画はここ。const の宣言より前に呼ぶと、参照した瞬間に例外で止まる
+renderFace(layer.face_profile);
+renderFitting(await currentExpedition());
+window.addEventListener("cosmeguri:expedition", (e) => renderFitting(e.detail));

@@ -20,6 +20,11 @@ from app.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
 
+# httpx は送信先の URL を INFO で丸ごと出す。駅すぱあとの REST のように
+# APIキーをクエリでしか受けない相手がいるので、そのままだとキーが平文で
+# ログに残る（Cloud Logging にも流れる）。この1行が唯一の防波堤なので外さない。
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 settings = get_settings()
 app = FastAPI(
     title="コスめぐり API",
@@ -51,15 +56,19 @@ async def healthz() -> dict:
         warnings.append(
             "開発用ログイン（パスワード検証なし）で動いています。本番では AUTH_MODE=firebase を設定してください"
         )
+    # providers のキーは環境変数と同じ名前にしてある。警告を読んだ人が
+    # どの変数を直せばよいか、対応表を引かずに分かるようにするため
     for name, mode in (
-        ("vto", settings.vto_mode),
-        ("transit", settings.transit_mode),
-        ("llm", settings.llm_mode),
+        ("youcam", settings.youcam_mode),
+        ("ekispert", settings.ekispert_mode),
+        ("gemini", settings.gemini_mode),
     ):
         # live 指定なのに mock/stub 実装が入っている = キーが無くて降格した
         degraded = providers[name].endswith((":mock", ":stub"))
         if mode == "live" and degraded:
-            warnings.append(f"{name}: live 指定ですがキーが無いため mock で動いています")
+            warnings.append(
+                f"{name.upper()}_MODE=live ですが、キーが無いため mock で動いています"
+            )
 
     return {
         "status": "ok",

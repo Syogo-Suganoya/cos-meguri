@@ -20,10 +20,11 @@ class Settings(BaseSettings):
 
     app_env: str = "local"
 
-    # プロバイダ切り替え
-    vto_mode: Mode = "mock"  # YouCam（試着・肌タイプ・顔属性）
-    transit_mode: Mode = "mock"  # 駅すぱあと MCP
-    llm_mode: Mode = "mock"  # Gemini
+    # 外部APIを実際に叩くか、内蔵の代役で済ませるか。変数名は使う API に揃えてある
+    youcam_mode: Mode = "mock"  # YouCam: 試着・肌タイプ・顔属性の解析
+    ekispert_mode: Mode = "mock"  # 駅すぱあと MCP: 経路・階段/EV・運行実況
+    # GEMINI_MODEL（モデルID）と1文字違い。取り違えると起動時に弾かれる
+    gemini_mode: Mode = "mock"  # Gemini: 言い回し・翻訳・チャットの条件抽出
     # データは Firestore に置く。memory はテスト専用（プロセスが死ぬと消える）
     repository: Literal["memory", "firestore"] = "firestore"
 

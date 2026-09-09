@@ -53,7 +53,9 @@ on("btn-dayof", "click", async () => {
   const blocks = [
     res.route_delay_minutes
       ? `<div class="msg alert">電車が遅れているので、動線を計算しなおしました（+${res.route_delay_minutes}分）: ${esc(res.route_message)}</div>`
-      : `<div class="msg ok">電車の乱れはありません。動線はそのままで大丈夫です。</div>`,
+      : res.route_checked
+        ? `<div class="msg ok">電車の乱れはありません。動線はそのままで大丈夫です。</div>`
+        : `<div class="msg alert">運行情報は取れていません。遅れの有無はご自身で確かめてください。</div>`,
   ];
   if (res.dressing_alert) blocks.push(`<div class="msg alert">${esc(res.dressing_alert)}</div>`);
   if (res.proposals.length)

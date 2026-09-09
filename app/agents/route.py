@@ -30,18 +30,11 @@ class RouteAgent:
         raw_routes = await self.transit.search(
             from_station=from_station, to_station=to_station, arrive_by=arrive_by
         )
-        locker = await self.transit.locker_station(to_station) if mode.needs_locker else None
         plans = [
-            luggage.build_plan(
-                segments,
-                direction="outbound",
-                mode=mode,
-                arrive_by=arrive_by,
-                locker_station=locker,
-            )
+            luggage.build_plan(segments, direction="outbound", mode=mode, arrive_by=arrive_by)
             for segments in raw_routes
         ]
-        return luggage.prefer_step_free(plans)[0] if plans else _empty("outbound", mode)
+        return luggage.prefer_easiest(plans)[0] if plans else _empty("outbound", mode)
 
     async def plan_return(
         self,
@@ -58,7 +51,7 @@ class RouteAgent:
             luggage.build_plan(segments, direction="return", mode=mode, depart_at=depart_at)
             for segments in raw_routes
         ]
-        return luggage.prefer_step_free(plans)[0] if plans else _empty("return", mode)
+        return luggage.prefer_easiest(plans)[0] if plans else _empty("return", mode)
 
     async def alternatives(
         self,
@@ -72,20 +65,19 @@ class RouteAgent:
         raw_routes = await self.transit.search(
             from_station=from_station, to_station=to_station, arrive_by=arrive_by
         )
-        locker = await self.transit.locker_station(to_station) if mode.needs_locker else None
         plans = [
-            luggage.build_plan(
-                s, direction="outbound", mode=mode, arrive_by=arrive_by, locker_station=locker
-            )
+            luggage.build_plan(s, direction="outbound", mode=mode, arrive_by=arrive_by)
             for s in raw_routes
         ]
-        return luggage.prefer_step_free(plans)
+        return luggage.prefer_easiest(plans)
 
     async def recheck(self, plan: RoutePlan) -> tuple[RoutePlan, int, str | None]:
         """当日モードの自律再計算。(更新後, 追加遅延, 通知文) を返す。
 
         遅延が無ければ通知文は None（無用な通知を飛ばさない）。
         """
+        # 引けるかどうかは叩いてみないと分からない（契約に含まれないことがある）。
+        # 呼んだあとに supports_disruptions を見て、当日ページの文面を分ける
         lines = sorted({s.line for s in plan.segments})
         disruptions = await self.transit.disruptions(lines)
         updated, delay = luggage.apply_disruptions(plan, disruptions)
