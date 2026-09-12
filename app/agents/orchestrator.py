@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 
 from app.agents.awase import AwaseAgent
 from app.agents.dressing import DressingAgent
-from app.agents.fitting import FittingAgent
 from app.agents.i18n import I18nAgent
 from app.agents.makeup import MakeupAgent
 from app.agents.route import RouteAgent
@@ -24,9 +23,6 @@ from app.domain.models import (
     EventRef,
     Expedition,
     ExpeditionStatus,
-    FaceProfile,
-    FittingKind,
-    FitzpatrickType,
     Lang,
     Layer,
     LuggageMode,
@@ -51,8 +47,6 @@ class PlanRequest:
     origin_station: str
     luggage_mode: LuggageMode = LuggageMode.CARRY
     lang: Lang = Lang.JA
-    face_image: bytes | None = None
-    include_fitting: bool = True
     attendance_factor: float = 1.0
 
 
@@ -78,7 +72,6 @@ class Orchestrator:
     def __init__(
         self,
         *,
-        fitting: FittingAgent,
         makeup: MakeupAgent,
         route: RouteAgent,
         dressing: DressingAgent,
@@ -87,7 +80,6 @@ class Orchestrator:
         repository: RepositoryPort,
         notifier: NotifierPort,
     ) -> None:
-        self.fitting = fitting
         self.makeup = makeup
         self.route = route
         self.dressing = dressing
@@ -118,10 +110,7 @@ class Orchestrator:
             ends_at=ends_at,
         )
 
-        # 1. 顔プロファイル（画像は解析後に破棄）
-        profile = await self._ensure_profile(layer, req.face_image)
-
-        # 2. 更衣室の混雑予測 → 入場・撤収の推奨
+        # 1. 更衣室の混雑予測 → 入場・撤収の推奨
         dressing_plan = await self.dressing.plan(
             event_master,
             day,
@@ -132,7 +121,7 @@ class Orchestrator:
         )
         leave_at = dressing_plan.recommended_exit or ends_at
 
-        # 3. 大荷物制約の動線（行き・帰り）
+        # 2. 大荷物制約の動線（行き・帰り）
         outbound = await self.route.plan_outbound(
             from_station=req.origin_station,
             to_station=event_master.station,
@@ -146,18 +135,8 @@ class Orchestrator:
             mode=req.luggage_mode,
         )
 
-        # 4. メイク工程（肌タイプ×顔属性×キャラ、母語で出力）
-        makeup_plan = await self.makeup.build(profile, req.character, lang=req.lang)
-
-        # 5. 試着候補（提案まで）
-        fitting_result = None
-        if req.include_fitting:
-            fitting_result = await self.fitting.propose(
-                layer_id=req.layer_id,
-                character=await self.makeup.enrich_character(req.character, lang=req.lang),
-                image_bytes=req.face_image,
-                kinds=[FittingKind.WIG, FittingKind.COSTUME],
-            )
+        # 3. メイク工程（キャラの色味・造形から、母語で出力）
+        makeup_plan = await self.makeup.build(req.character, lang=req.lang)
 
         exp = Expedition(
             exp_id=f"exp_{uuid.uuid4().hex[:8]}",
@@ -169,7 +148,6 @@ class Orchestrator:
             character=req.character,
             luggage_mode=req.luggage_mode,
             origin_station=req.origin_station,
-            fitting=fitting_result,
             makeup=makeup_plan,
             routes={"outbound": outbound, "return": inbound},
             dressing=dressing_plan,
@@ -184,18 +162,6 @@ class Orchestrator:
             "wake_up_hint": _wake_up_hint(outbound.depart_at, makeup_plan.total_minutes),
         }
         return exp, extras
-
-    async def _ensure_profile(self, layer: Layer, image: bytes | None) -> FaceProfile:
-        """画像があれば解析し直し、無ければ保存済みプロファイルを使う。"""
-        if image is not None:
-            profile = await self.fitting.analyze_face(layer.layer_id, image)
-            layer.face_profile = profile
-            await self.repository.save_layer(layer)
-            return profile
-        if layer.face_profile is not None:
-            return layer.face_profile
-        # 未解析でも工程は出す。中庸の既定値であることは UI 側で明示する
-        return FaceProfile(fitzpatrick_type=FitzpatrickType.III)
 
     # -- 当日モード -------------------------------------------------------
     async def run_day_of(self, exp_id: str, *, now: datetime | None = None) -> DayOfUpdate:

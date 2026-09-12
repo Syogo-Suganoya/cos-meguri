@@ -85,7 +85,6 @@ jobs:
             APP_ENV=production
             AUTH_MODE=firebase
             REPOSITORY=firestore
-            YOUCAM_MODE=live
             EKISPERT_MODE=live
             GEMINI_MODE=live
             GOOGLE_CLOUD_PROJECT=cos-meguri
@@ -95,8 +94,6 @@ jobs:
             EKISPERT_MCP_URL=${{ vars.EKISPERT_MCP_URL }}
           secrets: |
             GOOGLE_API_KEY=GOOGLE_API_KEY:latest
-            YOUCAM_API_KEY=YOUCAM_API_KEY:latest
-            YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest
             EKISPERT_API_KEY=EKISPERT_API_KEY:latest
           flags: >-
             --allow-unauthenticated

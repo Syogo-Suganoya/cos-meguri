@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>相談 — コスめぐり</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b10">
+<link rel="stylesheet" href="/static/style.css?v=53">
+</head>
+<body class="p-ask">
+
+<main>
+  <h1 class="page-title">相談</h1>
+  <p class="page-lead">書くか、欄を埋めるか、どちらでも。6つそろうと一日ぶんを組み立てます。</p>
+
+  <section class="card">
+    <h2>書いて伝える</h2>
+    <p class="note">まとめて書いても、ひとつずつでも構いません。読み取れたぶんは下の欄に入ります。</p>
+    <form id="ask-form" class="ask">
+      <textarea id="ask-text" rows="3" placeholder="例: 9/6のコミケに横浜駅から行きます。大荷物です。作品はブルーアーカイブ、キャラはアロナです"></textarea>
+      <div class="actions">
+        <button class="primary" type="submit">送る</button>
+        <button id="btn-reset" type="button" class="chat-reset">はじめから</button>
+      </div>
+    </form>
+    <div id="ask-log" class="chat-log"></div>
+  </section>
+
+  <section class="card">
+    <h2>条件をたしかめる</h2>
+    <p class="note">読み取りが違っていたら、ここで直せます。直したいものだけ触れば大丈夫です。</p>
+    <div class="grid">
+      <label data-slot="event_id">イベント<select id="slot-event"></select></label>
+      <label data-slot="day">日付<input id="slot-day" type="date"></label>
+      <label data-slot="title">作品名<input id="slot-title" maxlength="60" placeholder="例: ブルーアーカイブ"></label>
+      <label data-slot="character">キャラ名<input id="slot-character" maxlength="60" placeholder="例: アロナ"></label>
+      <label data-slot="origin_station">出発駅<input id="slot-station" maxlength="40" placeholder="例: 横浜"></label>
+      <label data-slot="luggage_mode">荷物<select id="slot-luggage">
+        <option value="light">手荷物だけ</option>
+        <option value="carry">キャリー1個</option>
+        <option value="heavy">キャリー＋ウィッグ＋大道具</option>
+      </select></label>
+    </div>
+    <div class="actions">
+      <button id="btn-apply" class="primary">この条件で組む</button>
+    </div>
+    <div id="slots-out" class="out"></div>
+  </section>
+</main>
+
+<script type="module" src="/static/js/pages/ask.js?v=53"></script>
+</body>
+</html>

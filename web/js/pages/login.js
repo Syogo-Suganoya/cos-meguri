@@ -35,7 +35,8 @@ if (cfg.provider === "firebase") {
 
 function goNext() {
   const next = new URLSearchParams(location.search).get("next");
-  location.href = next && next.startsWith("/") ? next : "/prep";
+  // 最初にやることは相談。準備（コス名）は後からでよい
+  location.href = next && next.startsWith("/") ? next : "/ask";
 }
 
 // ---- 開発用ログイン ----

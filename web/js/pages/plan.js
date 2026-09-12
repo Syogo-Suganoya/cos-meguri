@@ -3,12 +3,10 @@
 import { $, emptyState, esc, hhmm } from "./../core/dom.js";
 import { requireSession } from "./../core/auth.js";
 import { mountShell } from "./../core/shell.js";
-import { focusChat, mountChat } from "./../core/chat.js";
 import { currentExpedition } from "./../core/expedition.js";
 
 const layer = await requireSession();
 await mountShell({ step: "plan", layer });
-mountChat();
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -23,12 +21,9 @@ function render(exp) {
     ["makeup", "route", "dressing"].forEach((key) => {
       const pane = $(`pane-${key}`);
       emptyState(pane, {
-        text: "まだプランがありません。AIにイベント・日付・作品/キャラ・出発駅・荷物を教えてください。",
-        action: "AIに相談する",
+        text: "まだプランがありません。「相談」で条件をそろえると、ここに出ます。",
+        link: { href: "/ask", label: "相談をひらく" },
       });
-      pane.querySelector("[data-empty-action]")?.addEventListener("click", () =>
-        focusChat("9/6のコミケに横浜駅から行きます。大荷物です")
-      );
     });
     return;
   }
@@ -65,7 +60,6 @@ function renderMakeup(exp) {
     ${summary([
       fig(`${m.steps.length}<small>工程</small>`, "ステップの数"),
       fig(`${m.total_minutes}<small>分</small>`, "ぜんぶで"),
-      fig(esc(m.fitzpatrick_type), "肌タイプ"),
     ])}
     ${steps}
     ${fineprint("この工程の決めかた", m.notes)}`;
@@ -78,7 +72,9 @@ function renderRoute(exp) {
       if (!r) return "";
       const legs = r.segments
         .map(
-          (s) => `<div class="step"><h4>${esc(s.from_station)} → ${esc(s.to_station)}<span class="min">${s.minutes}分 / ${s.fare_yen}円</span></h4>
+          // 運賃は経路単位でしか返らない。区間に割ると2本目が「0円」に見えるので、
+          // ここは所要だけ出し、運賃は上の要約バーの合計に任せる
+          (s) => `<div class="step"><h4>${esc(s.from_station)} → ${esc(s.to_station)}<span class="min">${s.minutes}分</span></h4>
              <p>${esc(s.line)}</p></div>`
         )
         .join("");

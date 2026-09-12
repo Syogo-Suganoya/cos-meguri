@@ -8,13 +8,13 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=45">
+<link rel="stylesheet" href="/static/style.css?v=53">
 </head>
 <body class="p-prep">
 
 <main>
   <h1 class="page-title">準備</h1>
-  <p class="page-lead">顔を登録すると、メイクの工程があなたに合います。試着の候補はプランを組むと出ます。</p>
+  <p class="page-lead">合わせに呼ばれるときの名前を決めておきます。写真も本名も要りません。</p>
 
   <section class="card">
     <h2>コス名</h2>
@@ -29,36 +29,12 @@
   </section>
 
   <section class="card">
-    <h2>顔を登録する</h2>
-    <p class="note">写真は<strong>解析のあとすぐ消します</strong>。残るのは肌タイプと顔立ちの数値だけで、消したことも記録に残ります。明るいところで、正面から、前髪を上げて撮ると精度が上がります。</p>
-
-    <div class="actions">
-      <button id="btn-camera" class="primary">カメラで撮る</button>
-      <button id="btn-pick">ファイルを選ぶ</button>
-    </div>
-    <!-- 端末にカメラが無い/許可されない場合は、こちらが受け皿になる -->
-    <input id="face-file" type="file" accept="image/*" class="hidden">
-    <input id="face-capture" type="file" accept="image/*" capture="user" class="hidden">
-
-    <!-- カメラを開いているあいだだけ出す -->
-    <div id="camera-panel" class="camera hidden">
-      <video id="camera-view" class="camera-view" playsinline muted></video>
-      <div class="actions">
-        <button id="btn-shoot" class="primary">これで撮る</button>
-        <button id="btn-camera-cancel">やめる</button>
-      </div>
-    </div>
-
-    <div id="face-out" class="out"></div>
-  </section>
-
-  <section class="card">
-    <h2>試着してみる</h2>
-    <p class="note">キャラに寄せたウィッグと衣装の候補を出します。どれにするかを決めるのはあなたです。</p>
-    <div id="fitting-out" class="out"></div>
+    <h2>この先にあるもの</h2>
+    <p class="note">名前が決まったら、あとは「相談」で条件をそろえるだけです。</p>
+    <div id="next-out" class="out"></div>
   </section>
 </main>
 
-<script type="module" src="/static/js/pages/prep.js?v=45"></script>
+<script type="module" src="/static/js/pages/prep.js?v=53"></script>
 </body>
 </html>

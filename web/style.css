@@ -59,6 +59,7 @@
 
 .p-home    { --hue: var(--c1); --on: var(--c1-on); }
 .p-login   { --hue: var(--c1); --on: var(--c1-on); }
+.p-ask     { --hue: var(--c5); --on: var(--c5-on); }
 .p-prep    { --hue: var(--c1); --on: var(--c1-on); }
 .p-plan    { --hue: var(--c2); --on: var(--c2-on); }
 .p-day     { --hue: var(--c4); --on: var(--c4-on); }
@@ -230,6 +231,7 @@ body {
 .rail-step[data-done] .n { opacity: 1; color: var(--ok); font-size: 0.86rem; }
 .rail-step[data-done][aria-current] .n { color: inherit; }
 
+.rail-step[data-step="ask"]     { --sc: var(--c5); --sc-on: var(--c5-on); }
 .rail-step[data-step="prep"]    { --sc: var(--c1); --sc-on: var(--c1-on); }
 .rail-step[data-step="plan"]    { --sc: var(--c2); --sc-on: var(--c2-on); }
 .rail-step[data-step="day"]     { --sc: var(--c4); --sc-on: var(--c4-on); }
@@ -501,6 +503,7 @@ button.ghost:hover { transform: none; box-shadow: none; background: var(--ink); 
   justify-items: center;
 }
 .empty-text { margin: 0; font-size: 0.95rem; font-weight: 700; max-width: 32em; }
+
 .empty-note { margin: 0; font-size: 0.78rem; color: var(--ink-2); }
 
 .step {
@@ -596,29 +599,6 @@ button.ghost:hover { transform: none; box-shadow: none; background: var(--ink); 
 .msg.ok { border-left-color: var(--c5); }
 .msg.error { border-left-color: var(--c1); }
 
-/* ---- カメラ（顔の登録） ---- */
-
-.camera {
-  margin-top: 16px;
-  display: grid;
-  gap: 12px;
-  justify-items: start;
-}
-.camera-view {
-  display: block;
-  width: 100%;
-  max-width: 360px;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  background: var(--ink);
-  border: var(--edge);
-  border-radius: var(--r-card);
-  box-shadow: var(--pop);
-  /* 内カメラは鏡像のほうが合わせやすい */
-  transform: scaleX(-1);
-}
-.camera .actions { margin-top: 0; }
-
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
 .fit {
   border: var(--edge);
@@ -696,35 +676,16 @@ footer {
 }
 .ntf p { margin: 0; }
 
-/* ---- 相談（右サイドバー） ---- */
-
-.chat {
-  position: fixed;
-  top: var(--header-h);
-  right: 0;
-  bottom: 0;
-  width: var(--chat-w);
-  background: var(--paper);
-  border-left: 3px solid var(--ink);
-  padding: 18px;
-  overflow-y: auto;
-  z-index: 25;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.chat-head h2 { margin: 0; font-size: 1.1rem; font-weight: 900; letter-spacing: -0.03em; }
-.chat-head .ghost { display: none; }
-.chat-lead { margin: 0; font-size: 0.78rem; color: var(--ink-2); }
+/* ---- 相談（/ask の会話） ---- */
 
 .chat-log {
   display: grid;
   gap: 10px;
   align-content: start;
-  flex: 1;
-  min-height: 180px;
+  max-height: 40vh;
+  min-height: 0;
   overflow-y: auto;
+  margin-top: 16px;
   padding: 14px;
   background: var(--wash);
   border: var(--edge);
@@ -750,24 +711,38 @@ footer {
 }
 .bubble.pending { opacity: 0.45; }
 
-.slots { display: flex; flex-wrap: wrap; gap: 7px; }
-.slot {
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1.8;
-  padding: 0 10px;
-  border: 2px dashed var(--ink-2);
-  color: var(--ink-2);
+/* まだ埋まっていない欄。数だけ言われても、どれかは分からない */
+label[data-needed] { color: var(--hue); font-weight: 900; }
+label[data-needed] input,
+label[data-needed] select { border-color: var(--hue); box-shadow: 3px 3px 0 var(--hue); }
+label[data-needed]::after {
+  content: "まだ";
+  margin-left: 8px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 0 8px;
+  border: var(--edge);
+  border-radius: var(--r-pill);
+  background: var(--hue);
+  color: var(--on);
 }
-.slot.on { border: var(--edge); background: var(--accent); color: var(--ink); font-weight: 900; }
 
-.chat-input { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.chat-input input { flex: 1 1 100%; }
-/* 「送る」が主役。幅を取らせて、押す場所を迷わせない */
-.chat-input button[type="submit"] { flex: 1; }
+/* ページの末尾に置く行き先の案内 */
+.page-note { margin: 0; font-size: 0.88rem; color: var(--ink-2); }
+.page-note a { color: var(--ink); font-weight: 900; }
 
-/* 「はじめから」は会話を消す操作。同じ大きさで並べると誤爆する。
-   ボタンの体裁を外して、脇に小さく置く */
+/* 相談の入力。長く書けるように textarea にする */
+.ask { display: grid; gap: 12px; }
+.ask textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 84px;
+  font: inherit;
+  line-height: 1.7;
+}
+.ask .actions { margin-top: 0; align-items: center; }
+.ask .actions button[type="submit"] { min-width: 9em; }
+
 .chat-reset {
   flex: none;
   border: 0;
@@ -785,15 +760,6 @@ footer {
   color: var(--ink);
   transform: none;
   box-shadow: none;
-}
-
-.chat-fab { display: none; }
-
-/* 広い画面では常に開いている。本文はサイドバーぶん右を空ける */
-@media (min-width: 1000px) {
-  body:has(.chat) main,
-  body:has(.chat) footer { margin-right: var(--chat-w); }
-  body:has(.chat) .inbox { right: calc(var(--chat-w) + 14px); }
 }
 
 /* ---------------------------------------------------------------- 5. ページ別 */
@@ -1061,9 +1027,11 @@ footer {
 .f-prep    .feature-step { background: var(--c1); color: var(--c1-on); }
 .f-plan    .feature-step { background: var(--c2); color: var(--c2-on); }
 .f-day     .feature-step { background: var(--c4); color: var(--c4-on); }
+.f-privacy .feature-step { background: var(--c3); color: var(--c3-on); }
 .f-prep    { box-shadow: 9px 9px 0 var(--c1); }
 .f-plan    { box-shadow: 9px 9px 0 var(--c2); }
 .f-day     { box-shadow: 9px 9px 0 var(--c4); }
+.f-privacy { box-shadow: 9px 9px 0 var(--c3); }
 
 
 .f-day::before     { background: var(--c4); }
@@ -1140,40 +1108,6 @@ footer {
 .login-card .actions button { flex: 1; padding: 13px 20px; }
 
 /* ---------------------------------------------------------------- 6. レスポンシブ */
-
-/* 相談は引き出しになる。開いているあいだは後ろを覆い、外を触れば閉じる */
-.chat-veil { display: none; }
-
-@media (max-width: 999px) {
-  .chat-veil {
-    position: fixed;
-    inset: 0;
-    z-index: 24;
-    background: rgba(11, 11, 16, 0.42);
-  }
-  body.chat-open .chat-veil { display: block; }
-  .chat {
-    top: 0;
-    width: min(var(--chat-w), 100vw);
-    transform: translateX(100%);
-    transition: transform 0.18s ease;
-  }
-  body.chat-open .chat { transform: none; }
-  .chat-head .ghost { display: inline-block; }
-  .chat-fab {
-    display: block;
-    position: fixed;
-    right: 18px;
-    bottom: 18px;
-    z-index: 26;
-    background: var(--hue);
-    color: var(--on);
-    padding: 14px 24px;
-    font-size: 0.92rem;
-    box-shadow: 5px 5px 0 var(--ink);
-  }
-  body.chat-open .chat-fab { display: none; }
-}
 
 /* ヒーローは1列に。飾りは見出しの上の帯になる */
 @media (max-width: 900px) {

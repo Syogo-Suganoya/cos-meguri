@@ -4,14 +4,22 @@
 import { $, esc, hhmm, on } from "./dom.js";
 import { api } from "./api.js";
 import { logout } from "./auth.js";
-import { currentExpedition } from "./expedition.js";
+import { chatSession, currentExpedition } from "./expedition.js";
 import * as store from "./store.js";
 import { mountInbox, refreshInbox } from "./inbox.js";
 
 // 左端のシェブロン。並びに順番はあるが、順路ではない。どの節から始めてもよく、
 // 飛ばしても構わない。番号は「何番目にやること」ではなく、できたら ✓ に変わる目印。
 export const STEPS = [
-  { key: "prep", href: "/prep", label: "準備", done: ({ layer }) => Boolean(layer?.face_profile) },
+  // 相談は「条件がそろったか」。プランと同じ条件にすると2節が常に同時に点く
+  { key: "ask", href: "/ask", label: "相談", done: ({ chat }) => Boolean(chat?.is_complete) },
+  {
+    key: "prep",
+    href: "/prep",
+    label: "準備",
+    // 端末につけた仮の名前から変えたら「決めた」とみなす
+    done: ({ layer }) => Boolean(layer?.handle) && layer.handle !== store.loginHandle(),
+  },
   { key: "plan", href: "/plan", label: "プラン", done: ({ exp }) => Boolean(exp?.makeup) },
   { key: "day", href: "/day", label: "当日", done: () => Boolean(store.awaseId()) },
 ];
@@ -29,7 +37,7 @@ function railHtml(current) {
 }
 
 // 帯が見ている材料。ページ側で何かが増えたら updateRail() で知らせる
-const railState = { layer: null, exp: null };
+const railState = { layer: null, exp: null, chat: null };
 
 /** 節ごとに、材料がそろっているかを目印に出す。番号は「まだ」の印として残す。 */
 export function updateRail(patch = {}) {
@@ -86,7 +94,7 @@ export async function mountShell({ step = null, authed = true, layer = null, rai
   document.body.insertAdjacentHTML(
     "beforeend",
     `<footer>
-       <p>顔写真は登録のあとすぐ消します。位置の共有はイベントの当日だけで、終わって24時間で無効になります。</p>
+       <p>顔写真は受け取りません。位置の共有はイベントの当日だけで、終わって24時間で無効になります。</p>
      </footer>`
   );
 
@@ -122,9 +130,12 @@ export async function mountShell({ step = null, authed = true, layer = null, rai
 
   // 目印はプランを引けてから。枠の描画はここで待たせない
   if (withRail) {
-    updateRail({ layer, exp: null });
+    updateRail({ layer, exp: null, chat: null });
     currentExpedition()
       .then((exp) => updateRail({ exp }))
+      .catch(() => {});
+    chatSession()
+      .then((chat) => updateRail({ chat }))
       .catch(() => {});
     window.addEventListener("cosmeguri:expedition", (e) => updateRail({ exp: e.detail }));
   }

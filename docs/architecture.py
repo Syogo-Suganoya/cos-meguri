@@ -54,7 +54,6 @@ def main() -> None:
 
         with Cluster("外部API", graph_attr={"fontname": FONT}):
             gemini = AIPlatform("Gemini API\ngemini-3.7-flash")
-            youcam = Internet("YouCam API\nVTO / 肌タイプ / 顔属性")
             ekispert = Internet("駅すぱあと\nMCPサーバー")
 
         with Cluster("GCP", graph_attr={"fontname": FONT}):
@@ -67,7 +66,7 @@ def main() -> None:
         users >> pwa >> Edge(label="REST + IDトークン") >> app
         pwa >> Edge(label="ログイン", style="dashed") >> auth
         app >> Edge(label="検証", style="dashed") >> auth
-        app >> [gemini, youcam, ekispert]
+        app >> [gemini, ekispert]
         app >> [firestore, storage, logging]
 
 

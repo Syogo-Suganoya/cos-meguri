@@ -17,6 +17,7 @@ WEB = Path(__file__).resolve().parent.parent / "web"
 # URL → HTML ファイル。main.py の PAGES と対になる
 PAGES = {
     "/": WEB / "index.html",
+    "/ask": WEB / "pages" / "ask.html",
     "/login": WEB / "pages" / "login.html",
     "/prep": WEB / "pages" / "prep.html",
     "/plan": WEB / "pages" / "plan.html",
@@ -24,7 +25,7 @@ PAGES = {
 }
 
 # 左端のシェブロンの節。shell.js の STEPS と対になる
-STEPS = ["prep", "plan", "day"]
+STEPS = ["ask", "prep", "plan", "day"]
 
 
 @pytest.mark.parametrize("url,path", PAGES.items())
@@ -138,3 +139,13 @@ def test_page_route_does_not_shadow_the_api_or_docs(client):
     assert client.get("/api/events").status_code == 200
     assert client.get("/healthz").status_code == 200
     assert client.get("/nope").status_code == 404
+
+
+@pytest.mark.parametrize("url", [*PAGES.keys(), "/sw.js", "/manifest.webmanifest"])
+def test_pages_are_revalidated_not_cached(client, url):
+    """HTML に no-cache が無いと `?v=` を上げても意味がない。
+
+    ブラウザは古い HTML を握り込み、その HTML が指す古いアセットを読み続ける。
+    実際に「更新したのに前の画面が出る」ところまで行った。
+    """
+    assert client.get(url).headers.get("cache-control") == "no-cache", url

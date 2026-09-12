@@ -59,8 +59,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
 }
 
 _GREETING = {
-    "ja": "遠征の予定を教えてください。イベント・日付・キャラ・出発駅・荷物が揃えば、一日ぶんを組み立てます。",
-    "en": "Tell me about your trip. With the event, date, character, origin station and luggage, I'll build your whole day.",
+    "ja": "遠征の予定を教えてください。イベント・日付・作品名・キャラ名・出発駅・荷物の6つが揃えば、一日ぶんを組み立てます。",
+    "en": "Tell me about your trip. With the event, date, series, character, origin station and luggage — six in all — I'll build your whole day.",
 }
 
 
@@ -104,6 +104,26 @@ class ChatAgent:
         session.messages.append(ChatMessage(role=ChatRole.AGENT, text=reply))
         return await self.repository.save_chat(session)
 
+    async def set_slots(self, layer: Layer, values: dict) -> ChatSession:
+        """条件を直接書き換える（画面の入力欄から）。
+
+        自由文の言い換えを経由しないので、利用者が直したとおりに入る。
+        揃えばそのままプランを組む。空文字は「消す」として扱う。
+        """
+        session = await self.history(layer)
+        session.lang = layer.lang
+        for name, value in values.items():
+            if name in ChatSlots.model_fields:
+                setattr(session.slots, name, value or None)
+
+        reply = (
+            await self._build_plan(layer, session)
+            if session.slots.is_complete
+            else self._ask_next(session)
+        )
+        session.messages.append(ChatMessage(role=ChatRole.AGENT, text=reply))
+        return await self.repository.save_chat(session)
+
     def _ask_next(self, session: ChatSession) -> str:
         missing = session.slots.missing()
         filled = _filled_summary(session.slots, session.lang)
@@ -136,7 +156,7 @@ class ChatAgent:
             lines = [
                 f"{exp.event.name}（{exp.event.venue}）の一日を組みました。",
                 f"・メイク {exp.makeup.total_minutes}分／{len(exp.makeup.steps)}工程"
-                f"（肌タイプ {exp.makeup.fitzpatrick_type.value} と顔立ちに合わせています）",
+                f"（キャラの色味と造形に合わせています）",
             ]
             if route and route.depart_at:
                 lines.append(
@@ -156,7 +176,7 @@ class ChatAgent:
         lines = [
             f"Your day at {exp.event.name} ({exp.event.venue}) is ready.",
             f"- Makeup: {exp.makeup.total_minutes} min over {len(exp.makeup.steps)} steps "
-            f"(matched to skin type {exp.makeup.fitzpatrick_type.value} and your face)",
+            f"(matched to the character's colours and shapes)",
         ]
         if route and route.depart_at:
             lines.append(

@@ -11,7 +11,6 @@ from app.adapters.registry import Adapters, get_adapters
 from app.agents.awase import AwaseAgent
 from app.agents.chat import ChatAgent
 from app.agents.dressing import DressingAgent
-from app.agents.fitting import FittingAgent
 from app.agents.i18n import I18nAgent
 from app.agents.makeup import MakeupAgent
 from app.agents.orchestrator import Orchestrator
@@ -26,14 +25,12 @@ class AgentBundle:
         self.repository = adapters.repository
         self.notifier = adapters.notifier
         self.auth = adapters.auth
-        self.fitting = FittingAgent(adapters.vto, adapters.repository)
         self.makeup = MakeupAgent(adapters.llm)
         self.route = RouteAgent(adapters.transit, adapters.llm)
         self.dressing = DressingAgent(adapters.llm)
         self.awase = AwaseAgent(adapters.repository, adapters.notifier)
         self.i18n = I18nAgent(adapters.llm)
         self.orchestrator = Orchestrator(
-            fitting=self.fitting,
             makeup=self.makeup,
             route=self.route,
             dressing=self.dressing,

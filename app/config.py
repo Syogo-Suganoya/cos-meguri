@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     app_env: str = "local"
 
     # 外部APIを実際に叩くか、内蔵の代役で済ませるか。変数名は使う API に揃えてある
-    youcam_mode: Mode = "mock"  # YouCam: 試着・肌タイプ・顔属性の解析
     ekispert_mode: Mode = "mock"  # 駅すぱあと MCP: 経路・階段/EV・運行実況
     # GEMINI_MODEL（モデルID）と1文字違い。取り違えると起動時に弾かれる
     gemini_mode: Mode = "mock"  # Gemini: 言い回し・翻訳・チャットの条件抽出
@@ -41,8 +40,6 @@ class Settings(BaseSettings):
         return self.app_env in {"local", "test"}
 
     # 認証情報（live のときだけ必要）
-    youcam_api_key: str = ""
-    youcam_secret_key: str = ""
     ekispert_api_key: str = ""
     ekispert_mcp_url: str = ""
     google_api_key: str = ""

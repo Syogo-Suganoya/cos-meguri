@@ -41,15 +41,6 @@ class LayerUpdate(BaseModel):
     home_event: str | None = None
 
 
-class FaceAnalyzeRequest(BaseModel):
-    """デモ用。実運用ではマルチパートで画像を受ける。
-
-    image_b64 は解析にのみ使い、応答後は保持しない。
-    """
-
-    image_b64: str | None = None
-
-
 # ---------------------------------------------------------------- 遠征
 
 
@@ -60,9 +51,7 @@ class ExpeditionCreate(BaseModel):
     origin_station: str
     luggage_mode: LuggageMode | None = None
     lang: Lang | None = None
-    include_fitting: bool = True
     attendance_factor: float = Field(1.0, gt=0.0, le=3.0)
-    image_b64: str | None = None
 
 
 class MakeupStepOut(BaseModel):
@@ -84,7 +73,6 @@ class ExpeditionOut(BaseModel):
     makeup: dict | None = None
     routes: dict = Field(default_factory=dict)
     dressing: dict | None = None
-    fitting: dict | None = None
     extras: dict = Field(default_factory=dict)
 
 
@@ -126,17 +114,18 @@ class DecisionIn(BaseModel):
     approved: bool
 
 
-# ---------------------------------------------------------------- 試着
-
-
-class FittingRequest(BaseModel):
-    character: CharacterRef
-    image_b64: str | None = None
-    request_note: str = ""
-    limit: int = Field(3, ge=1, le=6)
-
-
 # ---------------------------------------------------------------- チャット
+
+
+class ChatSlotsIn(BaseModel):
+    """条件の直接指定。画面の入力欄から来る。空文字は「消す」。"""
+
+    event_id: str | None = None
+    day: datetime | None = None
+    title: str | None = Field(default=None, max_length=60)
+    character: str | None = Field(default=None, max_length=60)
+    origin_station: str | None = Field(default=None, max_length=40)
+    luggage_mode: LuggageMode | None = None
 
 
 class ChatRequest(BaseModel):

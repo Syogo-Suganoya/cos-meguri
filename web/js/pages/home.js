@@ -1,7 +1,6 @@
 /* トップ。何ができるアプリかを伝えるだけの案内ページ。
    ログインはアプリ側の画面（/login）が持つ。ここには入口のボタンしか置かない。 */
 
-import { $ } from "./../core/dom.js";
 import { api } from "./../core/api.js";
 import { mountShell } from "./../core/shell.js";
 import * as store from "./../core/store.js";
@@ -18,12 +17,8 @@ if (store.token()) {
 // トップは案内のページ。左のステップ帯は置かない
 await mountShell({ authed: Boolean(layer), layer, rail: false });
 
-// 入っている人を入口へ戻さない。続きへ送る
-const cta = $("btn-start");
-if (layer) {
-  cta.textContent = "つづきをひらく";
-  cta.href = "/prep";
-}
+// 文言は入っていても変えない。行き先の出し分けは /login がやる
+// （入っている人は login.js が /ask へ送る）
 
 // ---- 飛沫の層をずらして動かす ----
 //

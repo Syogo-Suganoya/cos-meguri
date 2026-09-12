@@ -2,8 +2,8 @@
 
 個人情報の扱いは §7 に従う:
 - レイヤーはコス名（handle）のみで成立し、本名・素顔と紐づけない
-- 顔画像は解析後に破棄し、Fitzpatrick 肌タイプと顔属性スコアだけを残す
-- 位置共有はイベント当日限定で、終了 +24h に自動削除する
+- **顔画像は受け取らない**（解析する相手を持たないので、入口ごと作らない）
+- 位置共有はイベント当日限定
 """
 
 from __future__ import annotations
@@ -61,71 +61,6 @@ class Lang(str, Enum):
         }[self]
 
 
-# ---------------------------------------------------------------- 顔プロファイル
-
-
-class FitzpatrickType(str, Enum):
-    """AI Fitzpatrick Skin Type Analysis の判定結果（I〜VI）。
-
-    どのタイプも「標準」ではない。工程の個別化は、同じキャラに同じ品質で
-    近づくための差分であって、優劣ではない（設計書 §7-2）。
-    """
-
-    I = "I"
-    II = "II"
-    III = "III"
-    IV = "IV"
-    V = "V"
-    VI = "VI"
-
-    @property
-    def depth_rank(self) -> int:
-        """明→暗の順位（1..6）。工程の閾値判定にのみ使う。"""
-        return ["I", "II", "III", "IV", "V", "VI"].index(self.value) + 1
-
-    @property
-    def is_deep(self) -> bool:
-        return self.depth_rank >= 5
-
-    @property
-    def is_light(self) -> bool:
-        return self.depth_rank <= 2
-
-
-class FaceAttributes(BaseModel):
-    """AI Face Attributes & Ratio Analyzer の正規化スコア（0.0〜1.0）。
-
-    画像そのものは保持しない。ここにある数値だけが Firestore に残る。
-    """
-
-    brow_depth: float = Field(0.5, ge=0.0, le=1.0)  # 彫りの深さ（大=深い）
-    nose_bridge: float = Field(0.5, ge=0.0, le=1.0)  # 鼻筋の高さ
-    eye_distance: float = Field(0.5, ge=0.0, le=1.0)  # 目の間隔（大=離れ目）
-    eye_roundness: float = Field(0.5, ge=0.0, le=1.0)  # 目の丸さ（大=丸目）
-    face_length: float = Field(0.5, ge=0.0, le=1.0)  # 顔の縦比（大=面長）
-    lip_fullness: float = Field(0.5, ge=0.0, le=1.0)  # 唇の厚み
-    jaw_width: float = Field(0.5, ge=0.0, le=1.0)  # エラ張り（大=角ばる）
-
-    def high(self, name: str, threshold: float = 0.62) -> bool:
-        return getattr(self, name) >= threshold
-
-    def low(self, name: str, threshold: float = 0.38) -> bool:
-        return getattr(self, name) <= threshold
-
-
-class FaceProfile(BaseModel):
-    """layers/{layerId}.face_profile — 数値のみ保持。画像は破棄済み。"""
-
-    fitzpatrick_type: FitzpatrickType
-    attributes: FaceAttributes = Field(default_factory=FaceAttributes)
-    analyzed_at: datetime = Field(default_factory=utcnow)
-    source_image_discarded: bool = True
-    # この数値を出した実装（"youcam:live" / "youcam:mock"）。live のアダプタが
-    # 内部でモックに落ちることがあるので、**実際に返した側**を持たせる。
-    # 監査ログはここを読む。アダプタ名を読むと「実APIで解析した」と嘘になる
-    analyzed_by: str = "youcam:mock"
-
-
 # ---------------------------------------------------------------- レイヤー
 
 
@@ -168,7 +103,6 @@ class Layer(BaseModel):
     handle: str
     lang: Lang = Lang.JA
     prefs: LayerPrefs = Field(default_factory=LayerPrefs)
-    face_profile: FaceProfile | None = None
     auth_uid: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
 
@@ -218,33 +152,6 @@ class EventRef(BaseModel):
         return self.starts_at.astimezone(JST).strftime("%Y-%m-%d")
 
 
-# ---------------------------------------------------------------- 試着
-
-
-class FittingKind(str, Enum):
-    WIG = "wig"
-    COSTUME = "costume"
-
-
-class FittingCandidate(BaseModel):
-    """YouCam VTO（Hair Style/Color・Clothes Try-On）の1候補。"""
-
-    candidate_id: str
-    kind: FittingKind
-    label: str
-    color: str | None = None
-    preview_url: str | None = None  # Cloud Storage の一時URL。TTLで消える
-    fit_score: float = 0.0
-    note: str | None = None
-
-
-class FittingResult(BaseModel):
-    character_hint: str  # 内部入力のみ。共有テキストには出さない（設計書 §7-4）
-    candidates: list[FittingCandidate] = Field(default_factory=list)
-    generated_at: datetime = Field(default_factory=utcnow)
-    source_image_discarded: bool = True
-
-
 # ---------------------------------------------------------------- メイク工程
 
 
@@ -289,7 +196,7 @@ class MakeupArea(str, Enum):
 
 
 class MakeupStep(BaseModel):
-    """expeditions/{expId}.makeup_steps[] — 肌タイプ・顔属性で個別化された1工程。"""
+    """expeditions/{expId}.makeup_steps[] — キャラの色味・造形から組んだ1工程。"""
 
     order: int
     area: MakeupArea
@@ -304,7 +211,6 @@ class MakeupPlan(BaseModel):
     steps: list[MakeupStep] = Field(default_factory=list)
     lang: Lang = Lang.JA
     total_minutes: int = 0
-    fitzpatrick_type: FitzpatrickType | None = None
     notes: list[str] = Field(default_factory=list)
 
 
@@ -419,7 +325,6 @@ class Expedition(BaseModel):
     character: CharacterRef
     luggage_mode: LuggageMode = LuggageMode.CARRY
     origin_station: str = ""
-    fitting: FittingResult | None = None
     makeup: MakeupPlan | None = None
     routes: dict[str, RoutePlan] = Field(default_factory=dict)
     dressing: DressingPlan | None = None
@@ -604,8 +509,9 @@ class ChatSession(BaseModel):
 
 
 class AuditAction(str, Enum):
+    # 顔解析と試着を取り下げたので、いまは誰も書かない（値だけ残す）
     FACE_IMAGE_DISCARDED = "face_image_discarded"
-    FITTING_IMAGE_DISCARDED = "fitting_image_discarded"
+    FITTING_IMAGE_DISCARDED = "fitting_image_discarded"  # 同上
     LOCATION_SHARE_ENABLED = "location_share_enabled"
     # 定期実行を外したので、いまは誰も書かない。過去に保存した記録を
     # 読み戻せるように値は残す（Firestore に文字列で入っている）
@@ -613,6 +519,7 @@ class AuditAction(str, Enum):
     RESCHEDULE_PROPOSED = "reschedule_proposed"
     RESCHEDULE_APPROVED = "reschedule_approved"
     RESCHEDULE_REJECTED = "reschedule_rejected"
+    # 試着と画像生成を取り下げたので、いまは誰も書かない（値だけ残す）
     IP_GUARD_BLOCKED = "ip_guard_blocked"
     EXPEDITION_PURGED = "expedition_purged"  # 同上（いまは誰も書かない）
     ACCOUNT_LINKED = "account_linked"  # 認証IDとコス名アカウントの紐付け
@@ -630,7 +537,7 @@ class AuditLog(BaseModel):
     action: AuditAction
     subject_id: str | None = None
     # この記録が「誰のこと」か。actor はエージェント名のことがあり
-    # （fitting-agent など）、subject_id も遠征IDや合わせIDが入るので、持ち主だけは
+    # （awase-agent など）、subject_id も遠征IDや合わせIDが入るので、持ち主だけは
     # 独立して持つ。記録の一覧を本人ぶんに絞るのに使う。
     layer_ids: list[str] = Field(default_factory=list)
     payload: dict = Field(default_factory=dict)

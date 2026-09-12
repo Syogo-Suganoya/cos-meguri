@@ -23,14 +23,18 @@ export function msg(el, text, kind = "") {
   if (el) el.innerHTML = `<div class="msg ${kind}">${esc(text)}</div>`;
 }
 
-/** まだ材料が揃っていない画面。何をすれば進むかを必ず書く。 */
-export function emptyState(el, { text, action, skippable = false }) {
+/** まだ材料が揃っていない画面。何をすれば進むかを必ず書く。
+ *
+ * 書く場所は「相談」のページ1箇所に集めた。ここには行き先だけを置く
+ * （その場に入力欄を置くと、返事の出る場所が無い）。
+ */
+export function emptyState(el, { text, link, note }) {
   if (!el) return;
   el.innerHTML = `
     <div class="empty">
       <p class="empty-text">${esc(text)}</p>
-      ${action ? `<button class="primary" data-empty-action>${esc(action)}</button>` : ""}
-      ${skippable ? `<p class="empty-note">ここは飛ばしても、ほかのページは使えます。</p>` : ""}
+      ${link ? `<a class="btn primary" href="${esc(link.href)}">${esc(link.label)}</a>` : ""}
+      ${note ? `<p class="empty-note">${esc(note)}</p>` : ""}
     </div>`;
 }
 

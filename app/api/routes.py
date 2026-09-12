@@ -9,15 +9,12 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.adapters.dev_auth import DevAuth
-from app.agents.fitting import IpGuardBlocked
 from app.agents.i18n import supported_langs
 from app.agents.orchestrator import PlanRequest
 from app.api.deps import AgentBundle, current_layer, get_agents
@@ -25,11 +22,10 @@ from app.config import get_settings
 from app.api.schemas import (
     AwaseCreate,
     ChatRequest,
+    ChatSlotsIn,
     DecisionIn,
     DevLoginRequest,
     ExpeditionCreate,
-    FaceAnalyzeRequest,
-    FittingRequest,
     LayerUpdate,
     MarkReadRequest,
     ProgressUpdate,
@@ -52,16 +48,6 @@ from app.domain.models import (
 from app.ports.auth import AuthError
 
 router = APIRouter(prefix="/api")
-
-
-def _decode_image(image_b64: str | None) -> bytes | None:
-    if not image_b64:
-        return None
-    payload = image_b64.split(",", 1)[-1]  # data URL のヘッダを落とす
-    try:
-        return base64.b64decode(payload, validate=True)
-    except (binascii.Error, ValueError):
-        raise HTTPException(status_code=400, detail="画像のデコードに失敗しました")
 
 
 # ---------------------------------------------------------------- 認証
@@ -166,29 +152,6 @@ async def api_update_me(
     return layer.model_dump(mode="json")
 
 
-@router.post("/me/face")
-async def api_analyze_face(
-    body: FaceAnalyzeRequest,
-    agents: AgentBundle = Depends(get_agents),
-    layer: Layer = Depends(current_layer),
-) -> dict:
-    """顔解析。画像は解析後に破棄し、数値スコアだけを保存する（設計書 §7-1）。"""
-    image = _decode_image(body.image_b64) or b"demo-face"
-    profile = await agents.fitting.analyze_face(layer.layer_id, image)
-    del image
-
-    layer.face_profile = profile
-    await agents.repository.save_layer(layer)
-    return {
-        "face_profile": profile.model_dump(mode="json"),
-        "image_retained": False,
-        "audit": [
-            log.model_dump(mode="json")
-            for log in await agents.repository.list_audit(subject_id=layer.layer_id)
-        ],
-    }
-
-
 # ---------------------------------------------------------------- お知らせ
 
 
@@ -246,6 +209,26 @@ async def api_chat(
     return payload
 
 
+@router.patch("/chat/slots")
+async def api_chat_slots(
+    body: ChatSlotsIn,
+    agents: AgentBundle = Depends(get_agents),
+    layer: Layer = Depends(current_layer),
+) -> dict:
+    """条件を直接書き換える。揃えばプランまで組む。
+
+    自由文だけだと「9/6を9/13に直したい」を言い直すのが手間なので、
+    項目ごとに置き換えられる経路を用意している。
+    """
+    session = await agents.chat.set_slots(layer, body.model_dump(exclude_unset=True))
+    payload = _chat_payload(session)
+    if session.exp_id:
+        exp = await agents.repository.get_expedition(session.exp_id)
+        if exp is not None:
+            payload["expedition"] = _expedition_payload(exp)
+    return payload
+
+
 @router.post("/chat/reset")
 async def api_chat_reset(
     agents: AgentBundle = Depends(get_agents), layer: Layer = Depends(current_layer)
@@ -260,42 +243,12 @@ def _chat_payload(session) -> dict:
     return data
 
 
-# ---------------------------------------------------------------- 試着
-
-
-@router.post("/fitting")
-async def api_fitting(
-    body: FittingRequest,
-    agents: AgentBundle = Depends(get_agents),
-    layer: Layer = Depends(current_layer),
-) -> dict:
-    try:
-        result = await agents.fitting.propose(
-            layer_id=layer.layer_id,
-            character=body.character,
-            image_bytes=_decode_image(body.image_b64),
-            limit=body.limit,
-            request_note=body.request_note,
-        )
-    except IpGuardBlocked as exc:
-        # 設計書 §7-4: 権利物の合成依頼は出力前に止める
-        raise HTTPException(
-            status_code=422,
-            detail={"error": "ip_guard_blocked", "reasons": exc.reasons},
-        )
-    payload = result.model_dump(mode="json")
-    payload.pop("character_hint", None)  # 内部入力は返さない
-    return payload
-
-
 # ---------------------------------------------------------------- 遠征
 
 
 def _expedition_payload(exp: Expedition, extras: dict | None = None) -> dict:
     data = exp.model_dump(mode="json")
     data.pop("character", None)  # キャラ情報は内部入力に限定（§7-4）
-    if data.get("fitting"):
-        data["fitting"].pop("character_hint", None)
     if data.get("makeup"):
         for step, model in zip(data["makeup"]["steps"], exp.makeup.steps if exp.makeup else []):
             step["area_label"] = (
@@ -323,8 +276,6 @@ async def api_create_expedition(
         origin_station=body.origin_station,
         luggage_mode=body.luggage_mode or layer.prefs.luggage_mode,
         lang=body.lang or layer.lang,
-        face_image=_decode_image(body.image_b64),
-        include_fitting=body.include_fitting,
         attendance_factor=body.attendance_factor,
     )
     exp, extras = await agents.orchestrator.plan(req)

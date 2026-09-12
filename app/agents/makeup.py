@@ -8,7 +8,7 @@ LLM が落ちてもルールベースの工程がそのまま返る。
 from __future__ import annotations
 
 from app.domain import makeup as makeup_rules
-from app.domain.models import CharacterRef, FaceProfile, Lang, MakeupPlan
+from app.domain.models import CharacterRef, Lang, MakeupPlan
 from app.ports.llm import LlmPort
 
 
@@ -37,14 +37,13 @@ class MakeupAgent:
 
     async def build(
         self,
-        profile: FaceProfile,
         character: CharacterRef,
         *,
         lang: Lang = Lang.JA,
     ) -> MakeupPlan:
-        """肌タイプ×顔属性×キャラの工程表を作り、母語で整える。"""
+        """キャラの色味・造形から工程表を作り、母語で整える。"""
         enriched = await self.enrich_character(character, lang=lang)
-        plan = makeup_rules.build_plan(profile, enriched, lang=lang)
+        plan = makeup_rules.build_plan(enriched, lang=lang)
 
         raw = [s.instruction for s in plan.steps]
         refined = await self.llm.refine_steps(raw, lang=lang.value, fallback=raw)
@@ -56,5 +55,5 @@ class MakeupAgent:
         return plan
 
     def coverage(self, plan: MakeupPlan) -> dict[str, int]:
-        """肌タイプ別の品質評価（設計書 §7-2）に使う個別化件数。"""
+        """工程ごとの個別化件数（キャラの色味・造形に由来するもの）。"""
         return makeup_rules.personalization_coverage(plan)

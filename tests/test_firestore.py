@@ -30,9 +30,6 @@ from app.domain.models import (
     EventRef,
     Expedition,
     ExpeditionStatus,
-    FaceAttributes,
-    FaceProfile,
-    FitzpatrickType,
     Lang,
     Layer,
     LuggageMode,
@@ -75,16 +72,12 @@ def _event(event_id: str = "acosta") -> EventRef:
 
 
 async def test_layer_roundtrip_keeps_every_field(repo):
-    """入れ子（顔属性）と列挙型が往復しても壊れない。"""
+    """入れ子（設定）と列挙型が往復しても壊れない。"""
     layer = Layer(
         layer_id=f"ly_{_uid()}",
         handle=f"テスト{_uid()}",
         lang=Lang.EN,
         auth_uid=f"uid_{_uid()}",
-        face_profile=FaceProfile(
-            fitzpatrick_type=FitzpatrickType.V,
-            attributes=FaceAttributes(brow_depth=0.81, eye_distance=0.22),
-        ),
     )
     layer.prefs.luggage_mode = LuggageMode.HEAVY
     await repo.save_layer(layer)
@@ -94,9 +87,6 @@ async def test_layer_roundtrip_keeps_every_field(repo):
     assert stored.handle == layer.handle
     assert stored.lang is Lang.EN
     assert stored.prefs.luggage_mode is LuggageMode.HEAVY
-    assert stored.face_profile.fitzpatrick_type is FitzpatrickType.V
-    assert stored.face_profile.attributes.brow_depth == 0.81
-    assert stored.face_profile.source_image_discarded is True
 
 
 async def test_layer_can_be_found_by_uid_and_handle(repo):

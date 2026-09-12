@@ -38,8 +38,7 @@ def test_healthz_reports_providers(client):
     res = client.get("/healthz")
     assert res.status_code == 200
     providers = res.json()["providers"]
-    # キーは環境変数と同じ名前、値はその変数の実効値（YOUCAM_MODE=mock で動いている）
-    assert providers["youcam"] == "youcam:mock"
+    # キーは環境変数と同じ名前、値はその変数の実効値（EKISPERT_MODE=mock で動いている）
     assert providers["ekispert"] == "ekispert:mock"
     assert providers["gemini"] == "gemini:stub"
     assert providers["notifier"] == "notifier:in_app"
@@ -88,23 +87,11 @@ def test_dev_login_config_declares_itself(client):
     assert "パスワード検証なし" in config["warning"]
 
 
-# ---------------------------------------------------------------- 顔解析・遠征
-
-
-def test_face_analysis_discards_image_and_logs_it(user):
-    """設計書 §7-1: 画像は残さず、破棄の証跡が残る。"""
-    res = user.post("/api/me/face", json={"image_b64": None})
-    assert res.status_code == 200
-    body = res.json()
-
-    assert body["image_retained"] is False
-    assert body["face_profile"]["source_image_discarded"] is True
-    assert any(log["action"] == "face_image_discarded" for log in body["audit"])
+# ---------------------------------------------------------------- 遠征
 
 
 def test_solo_expedition_plan_covers_the_whole_day(user):
-    """ユースケース1（ソロ遠征）: 試着→メイク→動線→更衣室が一度に揃う。"""
-    user.post("/api/me/face", json={})
+    """ユースケース1（ソロ遠征）: メイク→動線→更衣室が一度に揃う。"""
     body = _plan(user)
 
     assert body["makeup"]["steps"], "メイク工程が空"
@@ -114,12 +101,10 @@ def test_solo_expedition_plan_covers_the_whole_day(user):
     assert outbound["effective_minutes"] >= outbound["base_minutes"]
     assert outbound["transfers"] == max(len(outbound["segments"]) - 1, 0)
     assert body["dressing"]["is_model_estimate"] is True
-    assert body["fitting"]["candidates"]
     assert body["extras"]["wake_up_hint"]
 
     # 設計書 §7-4: キャラ情報は外向き応答に出さない
     assert "character" not in body
-    assert "character_hint" not in body["fitting"]
 
 
 def test_expedition_is_not_readable_by_others(user, login):
@@ -141,21 +126,6 @@ def test_english_layer_gets_english_plan(login):
     joined = " ".join(s["instruction"] for s in body["makeup"]["steps"])
     assert not _has_japanese(joined), joined
     assert body["extras"]["ui"]["dressing.heading"] == "Changing-room forecast"
-
-
-def test_ip_guard_returns_422(user):
-    res = user.post(
-        "/api/fitting",
-        json={
-            "character": {"title": "作品A", "name": "キャラB"},
-            "request_note": "アニメのスクショを背景に合成して",
-        },
-    )
-    assert res.status_code == 422
-    assert res.json()["detail"]["error"] == "ip_guard_blocked"
-
-    logs = user.get("/api/audit", params={"subject_id": user.layer_id}).json()["logs"]
-    assert any(log["action"] == "ip_guard_blocked" for log in logs)
 
 
 # ---------------------------------------------------------------- 当日モード・お知らせ
@@ -387,17 +357,3 @@ def test_outsider_cannot_read_an_awase(user, login):
     ).json()
     stranger = login("部外者")
     assert stranger.get(f"/api/awase/{awase['awase_id']}").status_code == 403
-
-
-def test_audit_records_who_actually_analysed_the_face(user):
-    """アダプタ名ではなく、実際に数値を返した実装を残す。
-
-    live のアダプタは実APIが応答しないとモックに落ちる。そこでアダプタ名を
-    書くと「実APIで解析した」という嘘の証跡になる。顔画像の扱いを示す記録なので
-    ここが不正確なのはいちばん筋が悪い。
-    """
-    body = user.post("/api/me/face", json={}).json()
-    assert body["face_profile"]["analyzed_by"] == "youcam:mock"
-
-    discarded = [log for log in body["audit"] if log["action"] == "face_image_discarded"]
-    assert discarded[-1]["payload"]["provider"] == "youcam:mock"

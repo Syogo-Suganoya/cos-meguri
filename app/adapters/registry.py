@@ -13,7 +13,6 @@ from app.adapters.dev_auth import DevAuth
 from app.adapters.in_app_notifier import InAppNotifier
 from app.adapters.memory_repo import MemoryRepository
 from app.adapters.mock_transit import MockTransit
-from app.adapters.mock_vto import MockVto
 from app.adapters.stub_llm import StubLlm
 from app.config import Settings, get_settings
 from app.ports.auth import AuthPort
@@ -21,24 +20,12 @@ from app.ports.llm import LlmPort
 from app.ports.notifier import NotifierPort
 from app.ports.repository import RepositoryPort
 from app.ports.transit import TransitPort
-from app.ports.vto import VtoPort
 
 logger = logging.getLogger(__name__)
 
 
 def _demote(mode_var: str, missing: str) -> None:
     logger.warning("%s=live ですが %s が未設定のため mock で起動します", mode_var, missing)
-
-
-def build_vto(settings: Settings) -> VtoPort:
-    if settings.youcam_mode == "live":
-        if not settings.youcam_api_key:
-            _demote("YOUCAM_MODE", "YOUCAM_API_KEY")
-            return MockVto()
-        from app.adapters.youcam_vto import YouCamVto
-
-        return YouCamVto(settings.youcam_api_key, settings.youcam_secret_key)
-    return MockVto()
 
 
 def build_transit(settings: Settings) -> TransitPort:
@@ -95,7 +82,6 @@ class Adapters:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.vto = build_vto(settings)
         self.transit = build_transit(settings)
         self.llm = build_llm(settings)
         self.repository = build_repository(settings)
@@ -105,7 +91,6 @@ class Adapters:
 
     def describe(self) -> dict[str, str]:
         return {
-            "youcam": self.vto.name,
             "ekispert": self.transit.name,
             "gemini": self.llm.name,
             "notifier": self.notifier.name,

@@ -1,54 +1,16 @@
-"""二次創作ガイドライン・エンジン（設計書 §7-4 / §11）。
+"""キャラ名・作品名の取り扱い（設計書 §7-4）。
 
-2つの責務を持つ:
-1. キャラ名・作品名は「メイク工程生成の内部入力」に限定し、外部共有される
-   テキストからは落とす
-2. 試着の生成画像に権利物のロゴ・素材を合成する依頼を、出力前に止める
+キャラ名と作品名は**メイク工程の生成にだけ**使い、外へ出すテキストからは落とす。
+身バレと権利まわりの両方の理由がある。
 
-止めた事実は監査ログ（IP_GUARD_BLOCKED）に残す。
+権利物のロゴ・素材の合成を止める検査は、試着と画像生成を取り下げた時点で
+呼び出し元が無くなったので消した。`AuditAction.IP_GUARD_BLOCKED` は
+過去の記録を読み戻せるように値だけ残してある。
 """
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
-
 from app.domain.models import CharacterRef
-
-# 権利物の素材・ロゴ合成にあたる依頼語（日英）
-_BLOCKED_PATTERNS: list[tuple[str, str]] = [
-    (r"公式(の)?(ロゴ|イラスト|素材|画像|絵)", "公式素材の合成依頼"),
-    (r"(ロゴ|エンブレム|社章)を(合成|貼|入れ|付け)", "ロゴ合成の依頼"),
-    (r"アニメ(の)?(スクショ|スクリーンショット|キャプチャ)", "本編キャプチャの利用"),
-    (r"原作(の)?(コマ|1枚絵|カット)", "原作画像の利用"),
-    (r"official\s+(logo|art(work)?|asset|illustration)", "official asset composition"),
-    (r"(composite|overlay|paste)\s+.*\blogo\b", "logo composition"),
-    (r"anime\s+screenshot", "screenshot reuse"),
-    (r"(公式|official).{0,6}(グッズ|merch).{0,6}(再現|replicate)", "official merch replication"),
-]
-
-
-@dataclass
-class GuardResult:
-    allowed: bool
-    reasons: list[str] = field(default_factory=list)
-    sanitized_text: str | None = None
-
-    @property
-    def blocked(self) -> bool:
-        return not self.allowed
-
-
-def screen_generation_request(prompt: str) -> GuardResult:
-    """試着・画像生成の依頼文を出力前に検査する。"""
-    reasons = [
-        label
-        for pattern, label in _BLOCKED_PATTERNS
-        if re.search(pattern, prompt, flags=re.IGNORECASE)
-    ]
-    if reasons:
-        return GuardResult(allowed=False, reasons=sorted(set(reasons)))
-    return GuardResult(allowed=True, sanitized_text=prompt)
 
 
 def redact_character(text: str, character: CharacterRef) -> str:

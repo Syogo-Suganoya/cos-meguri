@@ -1,22 +1,22 @@
-"""キャラ再現メイクの工程分解（設計書 §4 メイクナビ、§7-2 公平性）。
+"""キャラ再現メイクの工程分解（設計書 §4 メイクナビ）。
 
-Fitzpatrick 肌タイプと顔属性スコアから、決定的なルールで工程を組み立てる。
+**キャラの色味と造形だけ**から、決定的なルールで工程を組み立てる。
 Gemini は「言い回しを整える／母語に落とす」ためだけに後段で使い、
 LLM が無くても全工程が出せるようにここを純粋関数で完結させる。
 
-公平性の原則:
-- どの肌タイプも標準扱いしない。工程差は「同じキャラに同じ品質で近づく」ための差分
+肌タイプ（Fitzpatrick）と顔比率による個別化は取り下げた。判定に使っていた
+YouCam を外し、**測っていない数値で「あなたに合わせた」と言わない**ため。
+そのぶん、工程文は「自分の肌で濃さを決める」前提の書き方に寄せてある。
+
+守っている原則:
 - 肌を明るく／暗く塗り替える指示は出さない。キャラの色味には光と影で寄せる
-- 骨格の個別化は「元の骨格を否定する」表現を避け、光の置き場所として書く
+- 骨格を否定する表現を使わない。光と影の置き場所として書く
 """
 
 from __future__ import annotations
 
 from app.domain.models import (
     CharacterRef,
-    FaceAttributes,
-    FaceProfile,
-    FitzpatrickType,
     Lang,
     MakeupArea,
     MakeupPlan,
@@ -58,36 +58,18 @@ class _Draft:
 # ---------------------------------------------------------------- 各工程
 
 
-def _base(skin: FitzpatrickType, char: CharacterRef) -> _Draft:
+def _base(char: CharacterRef) -> _Draft:
     d = _Draft(
         MakeupArea.BASE,
         "素肌の色を活かしたまま、色ムラだけを整える下地を薄く伸ばす。",
         "Even out tone with a thin primer while keeping your own skin colour.",
-        minutes=6,
+        minutes=7,
     )
-    if skin.is_light:
-        d.add(
-            "血色が透けやすいので、赤みの出る小鼻と目周りにコントロールカラーを点置きしてから伸ばす。",
-            "Redness shows easily on type I–II: dot a colour corrector around the nose and eyes first.",
-            reason=f"肌タイプ {skin.value}: 赤みが出やすい",
-            minutes=2,
-        )
-    elif skin.is_deep:
-        d.add(
-            "白浮きを避けるため、フェイスラインとまぶたで2トーン使い分け、境目をスポンジで叩き込む。"
-            "キャラの肌色にはベースではなく、後段のハイライトと影で寄せる。",
-            "Avoid ashy cast: use two shades (face line vs. eyelids) and press the seam with a sponge. "
-            "Match the character's tone with highlight and shadow later — not by changing your base shade.",
-            reason=f"肌タイプ {skin.value}: 白浮き回避・明度は変えない",
-            minutes=3,
-        )
-    else:
-        d.add(
-            "テカりやすいTゾーンだけ皮脂崩れ防止を重ねる。",
-            "Add a mattifying layer on the T-zone only.",
-            reason=f"肌タイプ {skin.value}: Tゾーンの崩れ対策",
-            minutes=1,
-        )
+    d.add(
+        "キャラの肌色にはベースの明るさではなく、後段のハイライトと影で寄せる。",
+        "Match the character's tone with highlight and shadow later — not by changing your base shade.",
+        reason="明度は変えない",
+    )
     d.add(
         "撮影の照明で飛ばないよう、仕上げにフィックスミストを1プッシュ。",
         "Finish with one spray of setting mist so the base survives event lighting.",
@@ -97,171 +79,87 @@ def _base(skin: FitzpatrickType, char: CharacterRef) -> _Draft:
     return d
 
 
-def _brow(attrs: FaceAttributes, char: CharacterRef) -> _Draft:
-    hair = char.hair_color or "髪色"
+def _brow(char: CharacterRef) -> _Draft:
+    hair = char.hair_color or "ウィッグ"
     d = _Draft(
         MakeupArea.BROW,
         f"地眉をコンシーラーで潰し、{hair}に合わせた眉を描き直す。",
         f"Block out your natural brows with concealer, then redraw them to match the {char.hair_color or 'wig'} colour.",
-        minutes=8,
+        minutes=9,
     )
-    if attrs.high("brow_depth"):
-        d.add(
-            "眉骨が高いので、毛を1本ずつ描き足す方向で。面で塗ると影が強く出る。",
-            "With a prominent brow bone, draw hair-by-hair — a solid fill casts a heavy shadow.",
-            reason="彫りが深い: 面塗りだと影が強く出る",
-        )
-    elif attrs.low("brow_depth"):
-        d.add(
-            "眉骨が平坦なぶん、眉頭の下に薄く影を入れると立体が出る。",
-            "With a flatter brow bone, a light shadow under the brow head adds dimension.",
-            reason="彫りが浅い: 眉下の影で立体を作る",
-        )
-    else:
-        d.add(
-            "眉骨は中間なので、眉山の位置だけキャラに合わせて動かせば形が寄る。",
-            "With an average brow bone, shifting only the arch position moves you toward the character.",
-            reason="彫りは中間: 眉山の位置で寄せる",
-        )
+    d.add(
+        "形はキャラの眉山の位置に合わせる。太さより、山をどこに置くかで印象が決まる。",
+        "Match the arch position to the character — placement matters more than thickness.",
+        reason="キャラの眉山に合わせる",
+    )
     return d
 
 
-def _contour(skin: FitzpatrickType, attrs: FaceAttributes) -> _Draft:
+def _contour() -> _Draft:
     d = _Draft(
         MakeupArea.CONTOUR,
         "頬骨下と輪郭に影を入れて、キャラの顔の形に寄せる。",
         "Shade under the cheekbones and along the jaw to move toward the character's face shape.",
-        minutes=6,
+        minutes=7,
     )
-    if skin.is_deep:
-        d.add(
-            "グレー寄りの影は灰色に沈むので、赤みかプラム寄りの影色を選ぶ。",
-            "Grey-based contour reads ashy on deeper skin — pick a red or plum-leaning shade.",
-            reason=f"肌タイプ {skin.value}: 影色の色相を選び直す",
-        )
-    elif skin.is_light:
-        d.add(
-            "オレンジ寄りの影は浮くので、グレーベージュ寄りを薄く重ねる。",
-            "Orange-leaning contour looks stripey here — build up a grey-beige shade thinly.",
-            reason=f"肌タイプ {skin.value}: 影色の色相を選び直す",
-        )
-    else:
-        d.add(
-            "ベージュ〜ブラウンの影が馴染む。濃さより、頬骨下の入れ始めの位置で決まる。",
-            "Beige-to-brown shadow blends well here; placement under the cheekbone matters more than depth.",
-            reason=f"肌タイプ {skin.value}: 影色の色相を選び直す",
-        )
-    if attrs.low("nose_bridge"):
-        d.add(
-            "鼻筋は眉頭から鼻先まで通さず、眉頭寄りの1/3だけ影を置くと自然に高く見える。",
-            "Shade only the upper third of the nose bridge rather than the full length — it reads higher, not drawn-on.",
-            reason="鼻筋が低い: 影は上1/3に限定",
-            minutes=2,
-        )
-    if attrs.high("nose_bridge"):
-        d.add(
-            "鼻筋はすでに高いので、ノーズシャドウは省いて小鼻の脇だけに留める。",
-            "Your bridge is already high — skip the nose contour and touch only the sides of the nostrils.",
-            reason="鼻筋が高い: ノーズシャドウを省略",
-        )
-    if attrs.high("jaw_width"):
-        d.add(
-            "エラの外側は削らず、耳下からあご先へ向かう斜めの影でラインを繋ぐ。",
-            "Rather than carving the jaw corners, sweep a diagonal shadow from below the ear to the chin.",
-            reason="エラが張る: 削らず流れで繋ぐ",
-        )
-    if attrs.high("face_length"):
-        d.add(
-            "面長を締めるため、額の生え際とあご先にも横方向の影を薄く。",
-            "For a longer face, add a light horizontal shadow at the hairline and chin tip.",
-            reason="面長: 縦を詰める",
-        )
+    d.add(
+        "影色は自分の肌で試して選ぶ。濃さより、頬骨下の入れ始めの位置で決まる。",
+        "Pick the shade against your own skin; where you start under the cheekbone matters more than depth.",
+        reason="濃さより置き場所",
+    )
+    d.add(
+        "鼻筋は眉頭から鼻先まで通さず、眉頭寄りの1/3に留めると自然に見える。",
+        "Shade only the upper third of the nose bridge rather than the full length — it reads natural, not drawn-on.",
+        reason="鼻の影は上1/3に限定",
+        minutes=2,
+    )
     return d
 
 
-def _highlight(skin: FitzpatrickType, attrs: FaceAttributes) -> _Draft:
+def _highlight() -> _Draft:
     d = _Draft(
         MakeupArea.HIGHLIGHT,
         "頬骨の上・鼻先・唇の山に光を置く。",
         "Place light on the top of the cheekbones, the nose tip and the cupid's bow.",
-        minutes=4,
+        minutes=5,
     )
-    if skin.is_deep:
-        d.add(
-            "白いパール系は粉っぽく出るので、ゴールド／ブロンズの偏光を使い、量より置き場所で効かせる。",
-            "White pearl looks chalky — use gold or bronze shimmer and rely on placement rather than quantity.",
-            reason=f"肌タイプ {skin.value}: ハイライトの色を選び直す",
-        )
-    elif skin.is_light:
-        d.add(
-            "シャンパン〜シルバー系を少量。強いゴールドは肌から浮く。",
-            "A small amount of champagne or silver; strong gold separates from the skin here.",
-            reason=f"肌タイプ {skin.value}: ハイライトの色を選び直す",
-        )
-    if attrs.high("brow_depth"):
-        d.add(
-            "眉骨がもともと高いので、眉下のハイライトは省く（陰影が過剰になる）。",
-            "Skip the under-brow highlight — with a deep brow bone it over-sculpts.",
-            reason="彫りが深い: 眉下ハイライトを省略",
-        )
-    else:
-        d.add(
-            "眉下と目頭に小さくハイライトを置き、目元の立体を作る。",
-            "Add small highlights under the brow and at the inner corners to build eye dimension.",
-            reason="彫りが浅い: 眉下・目頭で立体を足す",
-        )
+    d.add(
+        "眉下と目頭にも小さく置くと、目元に立体が出る。量より置き場所で効かせる。",
+        "Small touches under the brow and at the inner corners build eye dimension; rely on placement, not quantity.",
+        reason="光は量より置き場所",
+    )
     return d
 
 
-def _eyeshadow(skin: FitzpatrickType, attrs: FaceAttributes, char: CharacterRef) -> _Draft:
+def _eyeshadow(char: CharacterRef) -> _Draft:
     eye = char.eye_color or "瞳の色"
     d = _Draft(
         MakeupArea.EYESHADOW,
         f"{eye}と揃うカラーをまぶたに。",
         f"Sweep a shade that echoes the character's {char.eye_color or 'eye colour'} across the lid.",
-        minutes=8,
+        minutes=9,
     )
-    if skin.is_deep:
-        d.add(
-            "淡色は発色しないので、白の下地を仕込んでから重ねると色が出る。",
-            "Pale shades won't show without a white base underneath — lay that down first.",
-            reason=f"肌タイプ {skin.value}: 淡色の発色を確保",
-            minutes=2,
-        )
-    if attrs.high("eye_roundness"):
-        d.add(
-            "丸目なので、横方向に長く入れると目の形がキャラ寄りに変わる。",
-            "For rounder eyes, extend the colour horizontally to reshape toward the character.",
-            reason="丸目: 横方向に伸ばす",
-        )
-    else:
-        d.add(
-            "切れ長なので、二重幅の中央を縦に濃くすると丸みが出る。",
-            "For narrower eyes, deepen the centre of the crease vertically to add roundness.",
-            reason="切れ長: 中央を縦に濃く",
-        )
+    d.add(
+        "淡い色が発色しないときは、白の下地を1枚仕込んでから重ねる。",
+        "If a pale shade won't show, lay down a white base first.",
+        reason="淡色の発色を確保",
+        minutes=1,
+    )
     return d
 
 
-def _eyeline(attrs: FaceAttributes) -> _Draft:
+def _eyeline(char: CharacterRef) -> _Draft:
     d = _Draft(
         MakeupArea.EYELINE,
         "上まぶたのキワを埋め、目尻を跳ね上げる。",
         "Fill the upper lash line, then flick the outer corner.",
-        minutes=7,
+        minutes=8,
     )
-    if attrs.high("eye_distance"):
-        d.add(
-            "目が離れ気味なので、目頭側にラインを足して中央に寄せる。目尻の延長は控えめに。",
-            "Eyes sit wider apart: extend the line at the inner corners and keep the outer flick short.",
-            reason="離れ目: 目頭側を足す",
-        )
-    elif attrs.low("eye_distance"):
-        d.add(
-            "目が寄り気味なので、目尻側を長めに引いて外へ広げる。目頭は塗り足さない。",
-            "Eyes sit closer together: draw the outer line longer and leave the inner corners bare.",
-            reason="寄り目: 目尻側を伸ばす",
-        )
+    d.add(
+        "跳ね上げの角度はキャラの目の形に合わせる。長さは鏡で正面から確かめる。",
+        "Match the flick angle to the character's eye shape; check the length head-on in the mirror.",
+        reason="キャラの目の形に合わせる",
+    )
     d.add(
         "下まぶたは目尻1/3のみ。全周を囲むと写真で目が小さく写る。",
         "Line only the outer third of the lower lid — a full circle shrinks the eye on camera.",
@@ -270,7 +168,7 @@ def _eyeline(attrs: FaceAttributes) -> _Draft:
     return d
 
 
-def _lens(skin: FitzpatrickType, char: CharacterRef) -> _Draft:
+def _lens(char: CharacterRef) -> _Draft:
     eye = char.eye_color or "キャラの瞳色"
     d = _Draft(
         MakeupArea.LENS,
@@ -278,56 +176,30 @@ def _lens(skin: FitzpatrickType, char: CharacterRef) -> _Draft:
         f"Insert lenses in the character's {char.eye_color or 'eye'} colour. Carry drops — venues are dry.",
         minutes=5,
     )
-    if skin.depth_rank >= 4:
-        d.add(
-            "地の虹彩が濃い場合、非着色の淡色レンズは発色しない。裏面が不透明（ベース入り）の型番を選ぶ。",
-            "Over a darker iris, sheer pale lenses won't show — choose an opaque-backed (base-layer) design.",
-            reason="虹彩が濃い: ベース入りレンズを選ぶ",
-        )
-    else:
-        d.add(
-            "地の虹彩が明るいので、フチが太い型は不自然に出やすい。フチ細めを選ぶ。",
-            "Over a lighter iris, thick limbal rings look artificial — pick a thinner ring.",
-            reason="虹彩が明るい: フチ細めを選ぶ",
-        )
+    d.add(
+        "地の虹彩が濃いと淡色レンズは発色しない。裏面が不透明（ベース入り）の型番なら色が出る。",
+        "Over a darker iris, sheer pale lenses won't show — an opaque-backed (base-layer) design will.",
+        reason="発色しないときはベース入りを選ぶ",
+    )
     return d
 
 
-def _lip(skin: FitzpatrickType, attrs: FaceAttributes) -> _Draft:
+def _lip(char: CharacterRef) -> _Draft:
     d = _Draft(
         MakeupArea.LIP,
         "唇の色をコンシーラーで一度消してから、キャラの色をのせる。",
         "Neutralise your lip colour with concealer first, then lay the character's shade on top.",
-        minutes=4,
+        minutes=5,
     )
-    if attrs.high("lip_fullness"):
-        d.add(
-            "厚みがあるので、輪郭の外周1〜2mmをコンシーラーで締めると輪郭が整う。",
-            "With fuller lips, tighten 1–2 mm outside the border with concealer.",
-            reason="唇が厚い: 外周を締める",
-        )
-    elif attrs.low("lip_fullness"):
-        d.add(
-            "薄めなので、山と中央だけオーバーリップにして中央に光を置く。",
-            "With thinner lips, over-draw only the cupid's bow and centre, then add light in the middle.",
-            reason="唇が薄い: 中央だけオーバーリップ",
-        )
-    else:
-        d.add(
-            "厚みは中間なので、輪郭はそのまま使い、色だけキャラに寄せる。",
-            "Average lip fullness — keep your own outline and shift only the colour.",
-            reason="唇の厚みは中間: 輪郭は変えない",
-        )
-    if skin.is_deep:
-        d.add(
-            "淡いリップは下地を1枚仕込まないと沈む。",
-            "Pale lipsticks need a base layer or they go muddy.",
-            reason=f"肌タイプ {skin.value}: 淡色リップの発色",
-        )
+    d.add(
+        "淡いリップは下地を1枚仕込まないと沈む。",
+        "Pale lipsticks need a base layer or they go muddy.",
+        reason="淡色リップの発色",
+    )
     return d
 
 
-def _wig_line(skin: FitzpatrickType) -> _Draft:
+def _wig_line(char: CharacterRef) -> _Draft:
     d = _Draft(
         MakeupArea.WIG_LINE,
         "ウィッグを被り、生え際の境目をファンデとパウダーで馴染ませる。",
@@ -337,7 +209,7 @@ def _wig_line(skin: FitzpatrickType) -> _Draft:
     d.add(
         "自分の肌の色に合わせた粉を使う（ネットの色ではなく肌に合わせる）。",
         "Match the powder to your own skin, not to the wig cap colour.",
-        reason=f"肌タイプ {skin.value}: 生え際の色は肌基準",
+        reason="生え際の色は肌基準",
     )
     return d
 
@@ -346,39 +218,34 @@ def _wig_line(skin: FitzpatrickType) -> _Draft:
 
 
 _BUILDERS = {
-    MakeupArea.BASE: lambda p, c: _base(p.fitzpatrick_type, c),
-    MakeupArea.BROW: lambda p, c: _brow(p.attributes, c),
-    MakeupArea.CONTOUR: lambda p, c: _contour(p.fitzpatrick_type, p.attributes),
-    MakeupArea.HIGHLIGHT: lambda p, c: _highlight(p.fitzpatrick_type, p.attributes),
-    MakeupArea.EYESHADOW: lambda p, c: _eyeshadow(p.fitzpatrick_type, p.attributes, c),
-    MakeupArea.EYELINE: lambda p, c: _eyeline(p.attributes),
-    MakeupArea.LENS: lambda p, c: _lens(p.fitzpatrick_type, c),
-    MakeupArea.LIP: lambda p, c: _lip(p.fitzpatrick_type, p.attributes),
-    MakeupArea.WIG_LINE: lambda p, c: _wig_line(p.fitzpatrick_type),
+    MakeupArea.BASE: _base,
+    MakeupArea.BROW: _brow,
+    MakeupArea.CONTOUR: lambda c: _contour(),
+    MakeupArea.HIGHLIGHT: lambda c: _highlight(),
+    MakeupArea.EYESHADOW: _eyeshadow,
+    MakeupArea.EYELINE: _eyeline,
+    MakeupArea.LENS: _lens,
+    MakeupArea.LIP: _lip,
+    MakeupArea.WIG_LINE: _wig_line,
 }
 
 _NOTES = {
     Lang.JA: [
-        "工程は肌タイプと顔属性に合わせた差分です。どのタイプも標準ではありません。",
+        "工程はキャラの色味と造形から組んでいます。肌の色や顔立ちは見ていないので、濃さはご自身に合わせて決めてください。",
         "肌の明るさ自体を変える指示は含みません。キャラの色味には光と影で寄せます。",
     ],
     Lang.EN: [
-        "Steps are personalised to your skin type and facial ratios. No type is treated as the default.",
+        "Steps are built from the character's colours and shapes. We don't look at your skin or face, so judge intensity against your own.",
         "Nothing here changes your skin's lightness — the character's tone is matched with light and shadow.",
     ],
 }
 
 
-def build_plan(
-    profile: FaceProfile,
-    character: CharacterRef,
-    *,
-    lang: Lang = Lang.JA,
-) -> MakeupPlan:
-    """肌タイプ×顔属性×キャラから工程表を生成する（LLM非依存）。"""
+def build_plan(character: CharacterRef, *, lang: Lang = Lang.JA) -> MakeupPlan:
+    """キャラから工程表を生成する（LLM非依存）。"""
     steps: list[MakeupStep] = []
     for order, area in enumerate(AREA_ORDER, start=1):
-        draft = _BUILDERS[area](profile, character)
+        draft = _BUILDERS[area](character)
         instruction = draft.ja if lang is Lang.JA else draft.en
         steps.append(
             MakeupStep(
@@ -394,11 +261,10 @@ def build_plan(
         steps=steps,
         lang=lang,
         total_minutes=sum(s.minutes for s in steps),
-        fitzpatrick_type=profile.fitzpatrick_type,
         notes=_NOTES.get(lang, _NOTES[Lang.EN]),
     )
 
 
 def personalization_coverage(plan: MakeupPlan) -> dict[str, int]:
-    """工程ごとの個別化件数。肌タイプ別の品質評価（設計書 §7-2）の素材。"""
+    """工程ごとの根拠の件数。工程の厚みを見るための素材。"""
     return {step.area.value: len(step.personalized_for) for step in plan.steps}

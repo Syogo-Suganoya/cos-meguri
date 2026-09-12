@@ -90,8 +90,6 @@ APIキーはイメージに焼き込まず、Secret Manager から注入する�
 
 ```bash
 printf '%s' 'YOUR_GEMINI_API_KEY' | gcloud secrets create GOOGLE_API_KEY --data-file=-
-printf '%s' 'YOUR_YOUCAM_API_KEY' | gcloud secrets create YOUCAM_API_KEY --data-file=-
-printf '%s' 'YOUR_YOUCAM_SECRET' | gcloud secrets create YOUCAM_SECRET_KEY --data-file=-
 printf '%s' 'YOUR_EKISPERT_KEY' | gcloud secrets create EKISPERT_API_KEY --data-file=-
 ```
 
@@ -123,8 +121,8 @@ gcloud run deploy cos-meguri \
   --region asia-northeast1 \
   --service-account cos-meguri-run@cos-meguri.iam.gserviceaccount.com \
   --allow-unauthenticated \
-  --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,YOUCAM_MODE=live,EKISPERT_MODE=live,GEMINI_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,EKISPERT_MCP_URL=https://api-mcp.ekispert.jp/mcp" \
-  --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,YOUCAM_API_KEY=YOUCAM_API_KEY:latest,YOUCAM_SECRET_KEY=YOUCAM_SECRET_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest"
+  --set-env-vars "APP_ENV=production,AUTH_MODE=firebase,REPOSITORY=firestore,EKISPERT_MODE=live,GEMINI_MODE=live,GOOGLE_CLOUD_PROJECT=cos-meguri,FIREBASE_PROJECT_ID=cos-meguri,FIREBASE_WEB_API_KEY=YOUR_WEB_API_KEY,GEMINI_MODEL=gemini-3.7-flash,EKISPERT_MCP_URL=https://api-mcp.ekispert.jp/mcp" \
+  --update-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,EKISPERT_API_KEY=EKISPERT_API_KEY:latest"
 ```
 
 ポイント:
@@ -149,7 +147,7 @@ curl -s https://SERVICE_URL/healthz
 Firebase の設定が入っていない（起動時のログに警告が出ているはず）。
 
 ```json
-{"status":"ok","env":"production","providers":{"youcam":"youcam:live","ekispert":"ekispert:live","gemini":"gemini:live","notifier":"notifier:in_app","repository":"repository:firestore","auth":"auth:firebase"}}
+{"status":"ok","env":"production","providers":{"ekispert":"ekispert:live","gemini":"gemini:live","notifier":"notifier:in_app","repository":"repository:firestore","auth":"auth:firebase"}}
 ```
 
 ブラウザで `https://SERVICE_URL/login` を開き、メールアドレス入力の欄が出ていれば
@@ -196,7 +194,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 
 1. **Secret Manager** → 「シークレットを作成」
 2. 名前に `GOOGLE_API_KEY`、値に Gemini の APIキーを貼る → 「シークレットを作成」
-3. 同様に `YOUCAM_API_KEY` / `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` を作る
+3. 同様に `EKISPERT_API_KEY` を作る
 
 > 値を貼るときは末尾に改行や空白が入らないよう注意する（コピー時に混入しやすい）。
 
@@ -223,7 +221,6 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
      | `APP_ENV` | `production` |
      | `AUTH_MODE` | `firebase` |
      | `REPOSITORY` | `firestore` |
-     | `YOUCAM_MODE` | `live` |
      | `EKISPERT_MODE` | `live` |
      | `GEMINI_MODE` | `live`（下の `GEMINI_MODEL` と1文字違い。取り違えない） |
      | `GOOGLE_CLOUD_PROJECT` | `cos-meguri` |
@@ -232,8 +229,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
      | `GEMINI_MODEL` | `gemini-3.7-flash` |
      | `EKISPERT_MCP_URL` | `https://api-mcp.ekispert.jp/mcp`（固定） |
 
-   - 同じタブの「シークレットを参照」で、`GOOGLE_API_KEY` / `YOUCAM_API_KEY` /
-     `YOUCAM_SECRET_KEY` / `EKISPERT_API_KEY` を
+   - 同じタブの「シークレットを参照」で、`GOOGLE_API_KEY` / `EKISPERT_API_KEY` を
      **環境変数として** 公開する（バージョンは `latest`）
 6. 「作成」
 

@@ -59,7 +59,6 @@ async def healthz() -> dict:
     # providers のキーは環境変数と同じ名前にしてある。警告を読んだ人が
     # どの変数を直せばよいか、対応表を引かずに分かるようにするため
     for name, mode in (
-        ("youcam", settings.youcam_mode),
         ("ekispert", settings.ekispert_mode),
         ("gemini", settings.gemini_mode),
     ):
@@ -76,6 +75,20 @@ async def healthz() -> dict:
         "providers": providers,
         "warnings": warnings,
     }
+
+
+# ETag は返っているので、no-cache を足せば「変わっていなければ 304」で済む。
+# 付けないとブラウザが独自の判断で握り込み、デプロイしても古いまま出る。
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+def _page(path: Path, media_type: str | None = None) -> FileResponse:
+    """ページ・マニフェスト・SW を返す。**必ず再確認させる。**
+
+    HTML に no-cache が無いと、`?v=` を上げても意味がない（新しい HTML を
+    読みに行かないので、古い HTML が古いままのアセットを指し続ける）。
+    """
+    return FileResponse(path, media_type=media_type, headers=NO_CACHE)
 
 
 class RevalidatingStaticFiles(StaticFiles):
@@ -99,11 +112,11 @@ if WEB_DIR.is_dir():
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
-        return FileResponse(WEB_DIR / "index.html")
+        return _page(WEB_DIR / "index.html")
 
     @app.get("/manifest.webmanifest", include_in_schema=False)
     async def manifest() -> FileResponse:
-        return FileResponse(WEB_DIR / "manifest.webmanifest")
+        return _page(WEB_DIR / "manifest.webmanifest")
 
     # ブラウザとiOSはルート直下を見にくる。/static/ に置くと拾われない
     @app.get("/favicon.svg", include_in_schema=False)
@@ -116,12 +129,14 @@ if WEB_DIR.is_dir():
 
     @app.get("/sw.js", include_in_schema=False)
     async def service_worker() -> FileResponse:
-        # PWA の Service Worker はルート直下から配信する必要がある
-        return FileResponse(WEB_DIR / "sw.js", media_type="application/javascript")
+        # PWA の Service Worker はルート直下から配信する必要がある。
+        # ここが握り込まれると、古い SW が居座って更新が止まる
+        return _page(WEB_DIR / "sw.js", media_type="application/javascript")
 
     # 機能ごとのページ。catch-all にすると /api や /docs の除外が要るうえ、
     # 打ち間違いが全部200になるので、出すページだけを明示する。
     PAGES = {
+        "ask": "ask.html",
         "login": "login.html",
         "prep": "prep.html",
         "plan": "plan.html",
@@ -133,4 +148,4 @@ if WEB_DIR.is_dir():
         filename = PAGES.get(page)
         if filename is None:
             raise HTTPException(status_code=404, detail="not found")
-        return FileResponse(WEB_DIR / "pages" / filename)
+        return _page(WEB_DIR / "pages" / filename)

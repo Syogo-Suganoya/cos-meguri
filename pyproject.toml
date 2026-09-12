@@ -14,6 +14,8 @@ dependencies = [
     "google-cloud-firestore>=2.16",
     "pyjwt>=2.9",
     "firebase-admin>=6.5",
+    # YouCam の S2S 認証で RSA 暗号化に使う（間接依存に頼らず明示する）
+    "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]

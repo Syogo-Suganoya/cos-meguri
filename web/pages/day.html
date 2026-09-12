@@ -8,29 +8,35 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=45">
+<link rel="stylesheet" href="/static/style.css?v=53">
 </head>
 <body class="p-day">
 
 <main>
   <h1 class="page-title">当日</h1>
-  <p class="page-lead">電車の遅れと片づけの時間は、当日じどうで見はっています。結果はお知らせ欄に届きます。</p>
+  <p class="page-lead">当日ここで進めることは2つあります。ひとりの動線と、合わせの段取りです。<strong>どちらも押したときだけ動きます。</strong></p>
 
-  <div id="dayof-gate"></div>
+  <h2 class="section-title">ひとりの一日</h2>
 
-  <section class="card hidden" data-needs-plan>
+  <section class="card">
     <h2>いまのようす</h2>
-    <p class="note">電車の乱れを見て動線を計算しなおします。片づけの時間になったらお知らせが届きます。</p>
-    <div class="actions">
-      <button id="btn-dayof" class="primary">いまの状況を見る</button>
+    <!-- プランが無いときは、ここだけが空になる（合わせは別に使える） -->
+    <div id="dayof-gate"></div>
+    <div class="hidden" data-needs-plan>
+      <p class="note">押すと、そのときの運行情報を見て動線を計算しなおします。片づけの時刻を過ぎていればお知らせに積みます。<strong>自動では動きません</strong>——開いて押したぶんだけ進みます。</p>
+      <div class="actions">
+        <button id="btn-dayof" class="primary">いまの状況を見る</button>
+      </div>
+      <div id="dayof-out" class="out"></div>
     </div>
-    <div id="dayof-out" class="out"></div>
   </section>
+
+  <h2 class="section-title">みんなで撮る（合わせ）</h2>
 
   <!-- 合わせがまだ無いとき -->
   <section class="card" id="awase-new">
     <h2>合わせをつくる</h2>
-    <p class="note">呼びたい人のコス名を入れるだけで招集できます。相手がまだ入っていなくても、同じコス名で入れば引き継がれます。</p>
+    <p class="note"><strong>プランが無くても作れます。</strong>呼びたい人のコス名を入れるだけで招集でき、相手がまだ入っていなくても、同じコス名で入れば引き継がれます。</p>
     <div class="grid">
       <label>合わせの名前<input id="awase-title" maxlength="60" placeholder="例: 星のカケラ 合わせ"></label>
       <label>イベント<select id="awase-event"></select></label>
@@ -77,6 +83,6 @@
 
 </main>
 
-<script type="module" src="/static/js/pages/day.js?v=45"></script>
+<script type="module" src="/static/js/pages/day.js?v=53"></script>
 </body>
 </html>

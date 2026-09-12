@@ -51,7 +51,6 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 
 | 環境変数 | mock（既定） | live |
 |---|---|---|
-| `YOUCAM_MODE` | ハッシュ由来の決定的な擬似応答 | YouCam API |
 | `EKISPERT_MODE` | 主要駅の静的グラフ | 駅すぱあと MCP |
 | `GEMINI_MODE` | キーワード抽出・固定文 | Gemini API（`gemini-3.7-flash`） |
 | `REPOSITORY` | — | Firestore（既定）。`memory` はテスト専用 |
@@ -59,7 +58,7 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 
 変数名は**使う API の名前**にしてある。`VTO` / `TRANSIT` / `LLM` は業界の略語で、
 何が動くのか名前から分からなかったため。`/healthz` の `providers` もキーを同じ名前に
-揃えてあり、値（`youcam:mock` / `youcam:live`）が変数の実効値になる。
+揃えてあり、値（`ekispert:mock` / `ekispert:live`）が変数の実効値になる。
 
 > [!WARNING]
 > **旧名 `VTO_MODE` / `TRANSIT_MODE` / `LLM_MODE` は無効になった。** 設定は
@@ -94,20 +93,20 @@ app/
 ├── config.py           mock / live の切り替え（環境変数のみ）
 ├── domain/             外部APIに依存しない純粋ロジック
 │   ├── models.py       設計書 §6 のデータモデル
-│   ├── makeup.py       肌タイプ×顔属性のメイク工程分解（★中核）
+│   ├── makeup.py       キャラの色味・造形からのメイク工程分解（★中核）
 │   ├── crowd.py        更衣室の混雑予測モデル
 │   ├── luggage.py      大荷物制約の経路評価
 │   ├── awase.py        合わせの進捗・到着監視・リスケ起案
 │   ├── parsing.py      チャットの自由文からの条件抽出（LLM非依存）
-│   ├── guardrails.py   二次創作ガイドライン・エンジン（権利物・ボイスクローン）
+│   ├── guardrails.py   共有テキストからキャラ名・作品名を落とす（§7-4）
 │   └── events.py       収載イベントのマスタ
 ├── ports/              外部依存のインターフェース
-├── adapters/           mock（既定）と live（YouCam/駅すぱあと/Gemini/Firestore/Firebase Auth）
+├── adapters/           mock（既定）と live（駅すぱあと/Gemini/Firestore/Firebase Auth）
 ├── agents/             設計書 §4 のエージェント構成
 └── api/                HTTP 層
 web/                    PWA（ログイン・チャット・お知らせも自作）
 ├── index.html          トップ（できること・使い方・ログイン）
-├── pages/              login / prep / plan / day の4画面
+├── pages/              ask / login / prep / plan / day の5画面
 ├── js/core/            全ページ共通（api・認証・枠・チャット・お知らせ・プラン復元）
 └── js/pages/           画面ごとの初期化。1画面1モジュール
 docs/                   アーキテクチャ図の生成スクリプト
@@ -119,8 +118,10 @@ tests/                  ユニット116件＋Firestore結合9件
 - **1画面1モジュール。**`<script type="module" src="/static/js/pages/plan.js">` だけを読む。
   バンドラは使わない。ページが持たない要素にハンドラを付けないので、
   「id が無くて例外」で画面全体が死ぬことがない（`core/dom.js` の `on()` がその役）
-- **枠（看板・シェブロン・チャット・お知らせ・脚注）は `core/shell.js` と `core/chat.js` が差し込む。**
-  HTML を6枚に複製するとズレるので、枠の出どころはここ1箇所
+- **枠（看板・シェブロン・お知らせ・脚注）は `core/shell.js` が差し込む。**
+  HTML を5枚に複製するとズレるので、枠の出どころはここ1箇所。
+  **相談は `/ask` の中だけ**にある（全ページ常駐の右サイドバーはやめた。
+  条件を確かめる場所と直す場所が分かれていると、どこを触れば結果が変わるのか分からない）
 - **`onclick` 属性は使わない。**module スコープの関数は呼べず、押しても無言で何も起きない。
   イベント委譲（`data-*` 属性）で受ける。`tests/test_web_shell.py` が見張っている
 - **モジュールの先頭で実行する処理は、参照する `const` より後ろに置く。**
@@ -180,11 +181,10 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 | POST | `/api/auth/dev-login` | 開発用ログイン（`AUTH_MODE=dev` のときだけ有効） |
 | POST | `/api/auth/session` | ログイン後にコス名アカウントを引き当てる／作る |
 | POST | `/api/chat` | チャット1往復。条件が揃えばプランまで組む |
+| PATCH | `/api/chat/slots` | 条件を直接書き換える（欄からの入力）。揃えばプランまで組む |
 | GET | `/api/me/notifications` | アプリ内お知らせ（未読数つき） |
-| POST | `/api/me/face` | 顔解析。画像は破棄し数値スコアのみ保存 |
-| POST | `/api/expeditions` | 遠征プラン一括生成（試着・メイク・動線・更衣室） |
+| POST | `/api/expeditions` | 遠征プラン一括生成（メイク・動線・更衣室） |
 | POST | `/api/expeditions/{id}/day-of` | 当日モードを1回進める（利用者の操作用） |
-| POST | `/api/fitting` | 試着候補の提案（権利物ガードを通す） |
 | POST | `/api/awase` | 合わせ作成。招集はコス名で行う |
 | POST | `/api/awase/{id}/monitor` | 到着監視＋リスケ起案（確定はしない） |
 | POST | `/api/awase/{id}/proposals/{pid}/decision` | 主催者の承認/却下 |
@@ -218,9 +218,9 @@ Firestore アダプタの結合テスト（9件）。エミュレータに実際
 | 設計書 | 実装 | テスト |
 |---|---|---|
 | §4 エージェント構成 | `agents/` の7エージェント | `test_api.py` |
-| §7-1 素顔とコス名の分離 | 画像は解析後に `del`、破棄証跡を audit へ | `test_face_analysis_discards_image_and_logs_it` |
+| §7-1 素顔とコス名の分離 | 顔写真を受け取る経路を持たない | — |
 | §7-1 認証 | 保持するのは uid のみ。メールは Firebase 側に留める | `test_account_stores_no_personal_data` |
-| §7-2 公平性 | 中庸も含め全工程に個別化根拠。明度を変える指示を出さない | `test_no_skin_lightening_instructions` ほか |
+| §7-2 公平性 | 顔を見ない。明度を変える指示を出さない | `test_nothing_claims_to_have_measured_the_face` ほか |
 | §7-3 位置共有の時限性 | `LocationShare.expires_at`（失効後は ETA を採らない） | `test_location_share_goes_inactive_after_the_event` |
 | §7-4 二次創作ガイドライン | `guardrails.py`。共有テキストからキャラ名を落とす | `test_ip_guard_returns_422` |
 | §7-5 リスケの承認制 | 主催者以外は 403。起案だけでは枠が動かない | `test_shoot_does_not_move_until_organizer_approves` |
@@ -281,8 +281,8 @@ docker compose --profile docs run --rm diagram
 
 - **ADK は依存に入れているが、まだ使っていない。** オーケストレータは手書きで、
   エージェント間の受け渡しは Python の関数呼び出し。ADK への載せ替えは `agents/` だけで済む形にしてある
-- **YouCam の live アダプタは実APIで未検証。** エンドポイントとレスポンスのキー名は
-  モジュール先頭の定数に集約してあり、契約確定後はそこだけ直せばよい
+- **顔を見る機能は持たない。** 肌タイプ判定（YouCam）を外したので、メイク工程は
+  キャラの色味・造形だけで組む。顔写真を受け取る経路がアプリのどこにも無い
 - **駅すぱあと MCP は公式ドキュメントに合わせたが、実キーでの疎通は未確認。**
   応答の読み取りだけは `tests/test_ekispert.py` がドキュメントの例で検証している。
   **この MCP に運行情報（遅延）の Tool は無い**ので、REST の

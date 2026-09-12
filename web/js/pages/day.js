@@ -7,14 +7,12 @@ import { $, emptyState, esc, hhmm, msg, on, withBusy } from "./../core/dom.js";
 import { api } from "./../core/api.js";
 import { requireSession } from "./../core/auth.js";
 import { eventNames, mountShell, updateRail } from "./../core/shell.js";
-import { focusChat, mountChat } from "./../core/chat.js";
 import { currentAwase, currentExpedition } from "./../core/expedition.js";
 import { refreshInbox } from "./../core/inbox.js";
 import * as store from "./../core/store.js";
 
 const layer = await requireSession();
 await mountShell({ step: "day", layer });
-mountChat();
 
 const PROGRESS_LABELS = {
   invited: "招待した",
@@ -40,12 +38,11 @@ function renderDayOfGate() {
     return;
   }
   emptyState(gate, {
-    text: "先にプランを組むと、当日の進み具合をここで追えます。",
-    action: "AIに相談する",
+    // ここで止まるのは「ひとりの動線」だけ。合わせは下でそのまま使える
+    text: "動線がまだありません。「相談」で条件をそろえると、当日の遅れをここで見られます。",
+    link: { href: "/ask", label: "相談をひらく" },
+    note: "ここが無くても、下の「合わせ」はそのまま使えます。",
   });
-  gate.querySelector("[data-empty-action]")?.addEventListener("click", () =>
-    focusChat("9/6のコミケに横浜駅から行きます。大荷物です")
-  );
 }
 
 on("btn-dayof", "click", async () => {
