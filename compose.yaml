@@ -8,14 +8,17 @@ services:
       PORT: 8080
       APP_ENV: local
       # モック / 実API の差し替えスイッチ（キーが無ければ自動で mock に落ちる）
-      EKISPERT_MODE: ${EKISPERT_MODE:-mock}       # 経路・遅延          mock | live
+      EKISPERT_MODE: ${EKISPERT_MODE:-mock}       # 経路                mock | live
       GEMINI_MODE: ${GEMINI_MODE:-mock}           # 言い回し・翻訳      mock | live
       REPOSITORY: ${REPOSITORY:-firestore}        # firestore | memory（memory はテスト専用）
-      # 認証。dev はパスワード検証なしのローカル専用
-      AUTH_MODE: ${AUTH_MODE:-dev}                # dev | firebase
-      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
-      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
-      DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-cos-meguri-local-development-secret-key-0001}
+      # 認証。ローカルも Firebase Authentication で、下の firebase-auth（エミュレータ）に繋ぐ。
+      # エミュレータはどんな API キーでも受けるので、プロジェクトIDだけ揃えればよい
+      AUTH_MODE: firebase
+      FIREBASE_PROJECT_ID: cos-meguri-local
+      FIREBASE_WEB_API_KEY: local-emulator-key
+      # サーバから見た場所と、ブラウザから見た場所。本番ではどちらも絶対に設定しない
+      FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
+      FIREBASE_AUTH_EMULATOR_URL: http://localhost:${AUTH_EMULATOR_PORT:-9099}
       # 実APIに差し替えるときだけ設定する
       EKISPERT_API_KEY: ${EKISPERT_API_KEY:-}
       EKISPERT_MCP_URL: ${EKISPERT_MCP_URL:-}
@@ -31,6 +34,8 @@ services:
     depends_on:
       firestore:
         condition: service_healthy
+      firebase-auth:
+        condition: service_healthy
     command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --reload"
 
   # テスト実行用: docker compose --profile test run --rm test
@@ -41,6 +46,7 @@ services:
     environment:
       APP_ENV: test
       REPOSITORY: memory
+      AUTH_MODE: dev   # パスワードを確かめないテスト用ログイン。APP_ENV=test でしか起動しない
     volumes:
       - ./app:/app/app
       - ./web:/app/web
@@ -90,3 +96,35 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+  # ログインの相手。api と一緒に立ち上がる。本番の Firebase Authentication と同じ
+  # REST（メール＋パスワード）を喋るので、ログイン画面もトークンの検証も本番と同じコードで通る。
+  # アカウントはメモリに持つので、docker compose down で消える
+  firebase-auth:
+    build: docker/auth-emulator
+    ports:
+      # ブラウザが直接ログインしにくるので、ホストにも出す
+      - "${AUTH_EMULATOR_PORT:-9099}:9099"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:9099/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # 画面操作イメージの撮影: docker compose up -d api のあと
+  #   docker compose --profile shots run --rm shots
+  # 利用者と同じ順に操作して docs/shots/ に書き出す
+  shots:
+    profiles: ["shots"]
+    build: docker/shots
+    user: root
+    working_dir: /work
+    environment:
+      BASE_URL: http://api:8080
+      NODE_PATH: /usr/src/app/node_modules
+      # 画面の時刻は日本時間で出しているが、ブラウザの「いま」も揃えておく
+      TZ: Asia/Tokyo
+    entrypoint: ["node", "docs/shots.js"]
+    volumes:
+      - ./docs:/work/docs

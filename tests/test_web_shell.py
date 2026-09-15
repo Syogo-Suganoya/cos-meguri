@@ -19,13 +19,13 @@ PAGES = {
     "/": WEB / "index.html",
     "/ask": WEB / "pages" / "ask.html",
     "/login": WEB / "pages" / "login.html",
-    "/prep": WEB / "pages" / "prep.html",
+    "/signup": WEB / "pages" / "signup.html",
     "/plan": WEB / "pages" / "plan.html",
-    "/day": WEB / "pages" / "day.html",
+    "/me": WEB / "pages" / "me.html",
 }
 
 # 左端のシェブロンの節。shell.js の STEPS と対になる
-STEPS = ["ask", "prep", "plan", "day"]
+STEPS = ["ask", "plan"]
 
 
 @pytest.mark.parametrize("url,path", PAGES.items())
@@ -141,6 +141,13 @@ def test_page_route_does_not_shadow_the_api_or_docs(client):
     assert client.get("/nope").status_code == 404
 
 
+@pytest.mark.parametrize("url", ["/prep", "/day"])
+def test_withdrawn_pages_are_really_gone(client, url):
+    """準備・当日は取り下げた。ルートだけ残ると、ブックマークから白い画面に入る。"""
+    assert client.get(url).status_code == 404
+    assert not (WEB / "pages" / f"{url[1:]}.html").exists()
+
+
 @pytest.mark.parametrize("url", [*PAGES.keys(), "/sw.js", "/manifest.webmanifest"])
 def test_pages_are_revalidated_not_cached(client, url):
     """HTML に no-cache が無いと `?v=` を上げても意味がない。
@@ -149,3 +156,24 @@ def test_pages_are_revalidated_not_cached(client, url):
     実際に「更新したのに前の画面が出る」ところまで行った。
     """
     assert client.get(url).headers.get("cache-control") == "no-cache", url
+
+
+# 帯（左端のシェブロン）を出すページ。shell.js の mountShell に rail を渡すページと対になる
+RAIL_PAGES = {"/ask": "ask", "/plan": "plan"}
+
+
+@pytest.mark.parametrize("url,path", PAGES.items())
+def test_frame_space_is_reserved_before_any_script_runs(url, path):
+    """看板と帯の置き場所を HTML に先に置く。
+
+    JS で後から差し込むと、最初の一瞬は本文が左上に詰まって描かれ、差し込んだ瞬間に
+    下と右へ飛ぶ（画面遷移のたびに表示が崩れて見えていた）。
+    """
+    html = path.read_text()
+    body = html.split("<body", 1)[1]
+    assert '<header class="top"' in body.split("<main", 1)[0], f"{path.name} に看板の置き場所が無い"
+
+    has_rail = bool(re.search(r'<nav class="rail"[^>]*data-step="([a-z]+)"', html))
+    assert has_rail == (url in RAIL_PAGES), f"{path.name} の帯の置き場所が mountShell と食い違う"
+    if url in RAIL_PAGES:
+        assert f'data-step="{RAIL_PAGES[url]}"' in html

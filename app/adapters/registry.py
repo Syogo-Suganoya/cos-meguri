@@ -7,17 +7,16 @@ live を指定してもキーが無ければ mock に落として起動を続け
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 
 from app.adapters.dev_auth import DevAuth
-from app.adapters.in_app_notifier import InAppNotifier
 from app.adapters.memory_repo import MemoryRepository
 from app.adapters.mock_transit import MockTransit
 from app.adapters.stub_llm import StubLlm
 from app.config import Settings, get_settings
 from app.ports.auth import AuthPort
 from app.ports.llm import LlmPort
-from app.ports.notifier import NotifierPort
 from app.ports.repository import RepositoryPort
 from app.ports.transit import TransitPort
 
@@ -59,22 +58,43 @@ def build_repository(settings: Settings) -> RepositoryPort:
 
 
 def build_auth(settings: Settings) -> AuthPort:
-    """既定は Firebase Authentication。設定が無ければ開発用ログインに落ちる。"""
-    if settings.auth_mode == "firebase":
-        if not settings.firebase_project_id or not settings.firebase_web_api_key:
-            _demote("auth", "FIREBASE_PROJECT_ID / FIREBASE_WEB_API_KEY")
-            return DevAuth(settings.dev_auth_secret)
-        from app.adapters.firebase_auth import FirebaseAuth
+    """ローカルも本番も Firebase Authentication。ローカルはエミュレータに繋ぐ。
 
-        return FirebaseAuth(settings.firebase_project_id, settings.firebase_web_api_key)
-
-    if not settings.is_local:
-        # パスワードを検証しない実装が本番で動かないよう、ここで止める
+    認証だけは mock に落とさない。設定が足りなければ起動を止める。
+    黙って「パスワードを確かめないログイン」に落ちると、気づかないまま外に出るため。
+    """
+    # firebase-admin はこの環境変数があると署名の無いトークンを通す。
+    # .env 経由の値も、環境変数としての値も、どちらも本番では許さない
+    emulator_host = settings.firebase_auth_emulator_host or os.environ.get(
+        "FIREBASE_AUTH_EMULATOR_HOST", ""
+    )
+    if emulator_host and not settings.is_local:
         raise RuntimeError(
-            "AUTH_MODE=dev はローカル専用です。APP_ENV が local/test 以外のときは "
-            "AUTH_MODE=firebase と FIREBASE_PROJECT_ID / FIREBASE_WEB_API_KEY を設定してください"
+            "FIREBASE_AUTH_EMULATOR_HOST はローカル専用です。設定されていると署名の無い"
+            "トークンが通ってしまうので、APP_ENV が local/test 以外では外してください"
         )
-    return DevAuth(settings.dev_auth_secret)
+
+    if settings.auth_mode == "dev":
+        if not settings.is_test:
+            # パスワードを検証しない実装は、テストの中でしか動かさない
+            raise RuntimeError(
+                "AUTH_MODE=dev はテスト専用です。ローカルは認証エミュレータ"
+                "（docker compose up api で一緒に起動する）を使ってください"
+            )
+        return DevAuth(settings.dev_auth_secret)
+
+    if not settings.firebase_project_id or not settings.firebase_web_api_key:
+        raise RuntimeError(
+            "AUTH_MODE=firebase には FIREBASE_PROJECT_ID と FIREBASE_WEB_API_KEY が要ります"
+        )
+    from app.adapters.firebase_auth import FirebaseAuth
+
+    return FirebaseAuth(
+        settings.firebase_project_id,
+        settings.firebase_web_api_key,
+        emulator_host=emulator_host,
+        emulator_url=settings.firebase_auth_emulator_url,
+    )
 
 
 class Adapters:
@@ -85,15 +105,12 @@ class Adapters:
         self.transit = build_transit(settings)
         self.llm = build_llm(settings)
         self.repository = build_repository(settings)
-        # 通知はアプリ内で完結するので差し替え先が無い。保存先だけが変わる
-        self.notifier = InAppNotifier(self.repository)
         self.auth = build_auth(settings)
 
     def describe(self) -> dict[str, str]:
         return {
             "ekispert": self.transit.name,
             "gemini": self.llm.name,
-            "notifier": self.notifier.name,
             "repository": self.repository.name,
             "auth": self.auth.name,
         }

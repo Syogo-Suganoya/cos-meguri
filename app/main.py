@@ -20,9 +20,9 @@ from app.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
 
-# httpx は送信先の URL を INFO で丸ごと出す。駅すぱあとの REST のように
-# APIキーをクエリでしか受けない相手がいるので、そのままだとキーが平文で
-# ログに残る（Cloud Logging にも流れる）。この1行が唯一の防波堤なので外さない。
+# httpx は送信先の URL を INFO で丸ごと出す。いまはキーをすべてヘッダで渡しているが、
+# クエリでしか受けない API を足した瞬間にキーが平文でログに残る（Cloud Logging にも
+# 流れる）。実際に一度そうなった。この1行が防波堤なので外さない。
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = get_settings()
@@ -46,15 +46,18 @@ app.include_router(router)
 async def healthz() -> dict:
     """稼働確認。設定の取り違えを目視ではなく応答で分かるようにする。
 
-    live のつもりが mock に落ちている・開発用ログインのまま、といった状態は
+    live のつもりが mock に落ちている・認証がエミュレータのまま、といった状態は
     起動ログを読まないと気づけない。warnings に出して確認を1回で済ませる。
     """
     providers = get_adapters().describe()
     warnings: list[str] = []
 
     if providers["auth"] == "auth:dev":
+        warnings.append("テスト用ログイン（パスワード検証なし）で動いています")
+    if providers["auth"] == "auth:firebase-emulator":
         warnings.append(
-            "開発用ログイン（パスワード検証なし）で動いています。本番では AUTH_MODE=firebase を設定してください"
+            "ログインは Firebase Authentication のエミュレータです（ローカル専用）。"
+            "本番では FIREBASE_AUTH_EMULATOR_HOST を設定しないでください"
         )
     # providers のキーは環境変数と同じ名前にしてある。警告を読んだ人が
     # どの変数を直せばよいか、対応表を引かずに分かるようにするため
@@ -138,9 +141,9 @@ if WEB_DIR.is_dir():
     PAGES = {
         "ask": "ask.html",
         "login": "login.html",
-        "prep": "prep.html",
+        "signup": "signup.html",
         "plan": "plan.html",
-        "day": "day.html",
+        "me": "me.html",
     }
 
     @app.get("/{page}", include_in_schema=False)

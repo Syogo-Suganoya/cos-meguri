@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from tests.conftest import DAY
 
@@ -41,13 +41,55 @@ def test_healthz_reports_providers(client):
     # キーは環境変数と同じ名前、値はその変数の実効値（EKISPERT_MODE=mock で動いている）
     assert providers["ekispert"] == "ekispert:mock"
     assert providers["gemini"] == "gemini:stub"
-    assert providers["notifier"] == "notifier:in_app"
     assert providers["auth"] == "auth:dev"
 
 
 def test_events_master_is_served(client):
     ids = {e["event_id"] for e in client.get("/api/events").json()["events"]}
     assert ids == {"wcs", "acosta", "comiket", "hokokos"}
+
+
+def test_event_names_are_matched_for_autofill(client):
+    """相談の画面は、これで目的地と時刻を自動で埋める。略称も当たる。"""
+    event = client.get("/api/events/match", params={"name": "コミケ"}).json()["event"]
+    assert event["event_id"] == "comiket"
+    assert event["defaults"] == {"destination_station": "国際展示場", "starts_time": "10:00", "ends_time": "16:00"}
+    assert client.get("/api/events/match", params={"name": "地元の撮影会"}).json() == {"event": None}
+
+
+def test_station_candidates_need_a_session(client, guest):
+    """入力のたびに駅すぱあとを呼ぶので、通行証の無い呼び出しには答えない。"""
+    assert client.get("/api/stations", params={"name": "国際"}).status_code == 401
+    assert guest.get("/api/stations", params={"name": "国際"}).json() == {"stations": ["国際展示場"]}
+
+
+def test_expedition_can_be_planned_for_a_local_event(user):
+    body = _plan(
+        user,
+        event_id=None,
+        event_name="地元の撮影会",
+        destination_station="大宮",
+        starts_time="13:00",
+        ends_time="17:00",
+    )
+    assert body["event"]["name"] == "地元の撮影会"
+    assert body["routes"]["outbound"]["segments"][-1]["to_station"] == "大宮"
+
+
+def test_local_event_without_a_destination_is_refused(user):
+    res = user.post(
+        "/api/expeditions",
+        json={
+            "event_name": "地元の撮影会",
+            "starts_time": "13:00",
+            "ends_time": "17:00",
+            "day": DAY.isoformat(),
+            "character": {"title": "作品A", "name": "キャラB"},
+            "origin_station": "横浜",
+        },
+    )
+    assert res.status_code == 422
+    assert res.json()["detail"]["field"] == "destination_station"
 
 
 # ---------------------------------------------------------------- 認証
@@ -64,7 +106,7 @@ def test_tampered_token_is_rejected(client, user):
     assert client.get("/api/me", headers=bad).status_code == 401
 
 
-def test_same_handle_returns_the_same_account(client, login):
+def test_same_user_returns_the_same_account(client, login):
     first = login("同じ人")
     second = login("同じ人")
     assert first.layer_id == second.layer_id
@@ -72,18 +114,18 @@ def test_same_handle_returns_the_same_account(client, login):
 
 def test_account_stores_no_personal_data(user):
     me = user.get("/api/me").json()
-    assert me["handle"] == "テストレイヤー"
     assert me["auth_uid"]  # 認証IDだけを持つ
+    # 名前も持たない。表示名があると、コス名から素性へ辿る手がかりになる
+    assert "handle" not in me
     assert "email" not in me
     logs = user.get("/api/audit", params={"subject_id": user.layer_id}).json()["logs"]
     linked = [log for log in logs if log["action"] == "account_linked"]
     assert linked and linked[0]["payload"]["stores_email"] is False
 
 
-def test_dev_login_config_declares_itself(client):
+def test_test_login_config_declares_itself(client):
     config = client.get("/api/auth/config").json()
     assert config["provider"] == "dev"
-    assert config["dev_login"] is True
     assert "パスワード検証なし" in config["warning"]
 
 
@@ -91,7 +133,7 @@ def test_dev_login_config_declares_itself(client):
 
 
 def test_solo_expedition_plan_covers_the_whole_day(user):
-    """ユースケース1（ソロ遠征）: メイク→動線→更衣室が一度に揃う。"""
+    """ユースケース1（ソロ遠征）: メイク→動線が一度に揃う。"""
     body = _plan(user)
 
     assert body["makeup"]["steps"], "メイク工程が空"
@@ -100,7 +142,10 @@ def test_solo_expedition_plan_covers_the_whole_day(user):
     # 大荷物ぶんは乗換の回数にだけ乗る（乗換ゼロなら伸びない）
     assert outbound["effective_minutes"] >= outbound["base_minutes"]
     assert outbound["transfers"] == max(len(outbound["segments"]) - 1, 0)
-    assert body["dressing"]["is_model_estimate"] is True
+    assert "dressing" not in body  # 更衣室の予測は取り下げた
+    # 行きは開場までに着き、帰りは閉場のあとに出る
+    assert _dt(outbound["arrive_at"]) <= _dt(body["event"]["starts_at"])
+    assert _dt(body["routes"]["return"]["depart_at"]) >= _dt(body["event"]["ends_at"])
     assert body["extras"]["wake_up_hint"]
 
     # 設計書 §7-4: キャラ情報は外向き応答に出さない
@@ -125,235 +170,32 @@ def test_english_layer_gets_english_plan(login):
     )
     joined = " ".join(s["instruction"] for s in body["makeup"]["steps"])
     assert not _has_japanese(joined), joined
-    assert body["extras"]["ui"]["dressing.heading"] == "Changing-room forecast"
+    assert body["extras"]["ui"]["route.heading"] == "Route (heavy-luggage mode)"
+    # 経路の注意書きと工程の見出しも英語（駅名は固有名詞なので問わない）
+    warnings = [w for r in body["routes"].values() for w in r["warnings"]]
+    assert not any(_has_japanese(w) for w in warnings), warnings
+    assert not any(_has_japanese(s["area_label"]) for s in body["makeup"]["steps"])
 
 
-# ---------------------------------------------------------------- 当日モード・お知らせ
+def test_switching_language_rebuilds_the_plan_in_that_language(user):
+    """画面の言語を変えたら、プランの文面もその言語で組み直す。"""
+    from tests.test_ask import FULL
+
+    before = user.patch("/api/chat/slots", json=FULL).json()["expedition"]
+    assert _has_japanese(before["makeup"]["steps"][0]["instruction"])
+
+    user.patch("/api/me", json={"lang": "en"})
+    chat = user.get("/api/chat").json()
+    after = user.get(f"/api/expeditions/{chat['exp_id']}").json()
+    assert after["lang"] == "en"
+    assert not _has_japanese(" ".join(s["instruction"] for s in after["makeup"]["steps"]))
 
 
-def test_day_of_alert_lands_in_the_in_app_inbox(user):
-    """当日モードの自律通知が、外部サービスではなくアプリ内お知らせに積まれる。"""
-    exp = _plan(user, event_id="acosta")
-    alert_at = _dt(exp["dressing"]["teardown_alert_at"])
+def test_errors_carry_a_code_the_screen_can_translate(user):
+    """画面は code を見て、自分の言語で言い直す（サーバの文面は日本語のまま）。"""
+    from tests.test_ask import LOCAL
 
-    res = user.post(
-        f"/api/expeditions/{exp['exp_id']}/day-of",
-        params={"now": (alert_at + timedelta(minutes=5)).isoformat()},
-    )
-    assert res.status_code == 200
-    assert res.json()["dressing_alert"]
-    assert res.json()["notified"] >= 1
+    user.patch("/api/chat/slots", json=LOCAL)
+    detail = user.patch("/api/chat/slots", json={"starts_time": "18:00"}).json()["detail"]
+    assert (detail["field"], detail["code"]) == ("ends_time", "ends_before_starts")
 
-    inbox = user.get("/api/me/notifications").json()
-    assert inbox["unread"] >= 1
-    assert any(n["kind"] == "teardown" for n in inbox["notifications"])
-
-
-def test_notifications_can_be_marked_read(user):
-    exp = _plan(user, event_id="acosta")
-    alert_at = _dt(exp["dressing"]["teardown_alert_at"])
-    user.post(
-        f"/api/expeditions/{exp['exp_id']}/day-of",
-        params={"now": (alert_at + timedelta(minutes=5)).isoformat()},
-    )
-
-    assert user.post("/api/me/notifications/read", json={}).json()["read"] >= 1
-    assert user.get("/api/me/notifications").json()["unread"] == 0
-
-
-def test_inbox_is_private_to_its_owner(user, login):
-    exp = _plan(user, event_id="acosta")
-    alert_at = _dt(exp["dressing"]["teardown_alert_at"])
-    user.post(
-        f"/api/expeditions/{exp['exp_id']}/day-of",
-        params={"now": (alert_at + timedelta(minutes=5)).isoformat()},
-    )
-    stranger = login("無関係な人")
-    assert stranger.get("/api/me/notifications").json()["notifications"] == []
-
-
-# ---------------------------------------------------------------- 合わせ
-
-
-def test_awase_flow_requires_organizer_approval(user, login):
-    """ユースケース2（合わせ）: 招集→進捗→監視→承認まで通す。"""
-    organizer = user
-    awase = organizer.post(
-        "/api/awase",
-        json={
-            "title": "合わせテスト",
-            "event_id": "acosta",
-            "day": DAY.isoformat(),
-            "members": [{"handle": "Aさん"}],
-        },
-    ).json()
-    awase_id = awase["awase_id"]
-    assert awase["summary"]["total"] == 2
-    late_id = next(m["layer_id"] for m in awase["members"] if not m["is_organizer"])
-
-    shoot_at = DAY.replace(hour=13)
-    organizer.post(
-        f"/api/awase/{awase_id}/shoots",
-        json={"starts_at": shoot_at.isoformat(), "place": "屋上", "minutes": 30},
-    )
-
-    # 主催者が代理で、遅れそうなメンバーの ETA を入れる
-    organizer.post(
-        f"/api/awase/{awase_id}/progress",
-        json={
-            "layer_id": late_id,
-            "progress": "en_route",
-            "eta": shoot_at.replace(minute=35).isoformat(),
-            "share_location": True,
-        },
-    )
-
-    monitored = organizer.post(
-        f"/api/awase/{awase_id}/monitor",
-        params={"now": DAY.replace(hour=12).isoformat()},
-    ).json()
-    assert len(monitored["proposals"]) == 1
-    proposal = monitored["proposals"][0]
-    # 起案しただけで枠は動かない
-    assert _dt(monitored["awase"]["shoots"][0]["starts_at"]) == shoot_at
-
-    # 承認依頼は主催者のお知らせに届く
-    inbox = organizer.get("/api/me/notifications").json()["notifications"]
-    assert any(n["kind"] == "reschedule_request" for n in inbox)
-
-    approved = organizer.post(
-        f"/api/awase/{awase_id}/proposals/{proposal['proposal_id']}/decision",
-        json={"approved": True},
-    ).json()
-    assert approved["proposal"]["status"] == "approved"
-    assert approved["awase"]["shoots"][0]["starts_at"] == proposal["proposed_start"]
-
-    logs = organizer.get("/api/audit", params={"subject_id": awase_id}).json()["logs"]
-    assert any(log["action"] == "reschedule_approved" for log in logs)
-    assert any(log["action"] == "location_share_enabled" for log in logs)
-
-
-def test_notification_text_uses_venue_local_time(user):
-    """お知らせの文面は会場時刻（JST）で書く。
-
-    撮影枠はクライアントから UTC で届くので、素直に書式化すると9時間ずれる。
-    """
-    awase = user.post(
-        "/api/awase",
-        json={"title": "時刻テスト", "event_id": "acosta", "day": DAY.isoformat(),
-              "members": [{"handle": "Cさん"}]},
-    ).json()
-    awase_id = awase["awase_id"]
-    late_id = next(m["layer_id"] for m in awase["members"] if not m["is_organizer"])
-
-    # 13:00 JST = 04:00 UTC の撮影枠
-    shoot_at = DAY.replace(hour=4)
-    user.post(
-        f"/api/awase/{awase_id}/shoots",
-        json={"starts_at": shoot_at.isoformat(), "place": "屋上"},
-    )
-    user.post(
-        f"/api/awase/{awase_id}/progress",
-        json={
-            "layer_id": late_id,
-            "progress": "en_route",
-            "eta": shoot_at.replace(minute=35).isoformat(),
-            "share_location": True,
-        },
-    )
-    user.post(
-        f"/api/awase/{awase_id}/monitor",
-        params={"now": DAY.replace(hour=3).isoformat()},
-    )
-
-    request = next(
-        n
-        for n in user.get("/api/me/notifications").json()["notifications"]
-        if n["kind"] == "reschedule_request"
-    )
-    assert "13:00" in request["message"], request["message"]
-    assert "04:00" not in request["message"]
-
-
-def test_invited_member_takes_over_the_pending_account(user, login):
-    """招待だけされた相手が、同じコス名でログインするとアカウントを引き継ぐ。"""
-    awase = user.post(
-        "/api/awase",
-        json={
-            "title": "引き継ぎテスト",
-            "event_id": "acosta",
-            "day": DAY.isoformat(),
-            "members": [{"handle": "あとから来る人"}],
-        },
-    ).json()
-    invited_id = next(m["layer_id"] for m in awase["members"] if not m["is_organizer"])
-
-    member = login("あとから来る人")
-    assert member.layer_id == invited_id
-    assert member.get(f"/api/awase/{awase['awase_id']}").status_code == 200
-
-    inbox = member.get("/api/me/notifications").json()["notifications"]
-    assert any(n["kind"] == "awase_invite" for n in inbox)
-
-
-def test_non_organizer_cannot_confirm_or_add_shoots(user, login):
-    awase = user.post(
-        "/api/awase",
-        json={
-            "title": "権限テスト",
-            "event_id": "acosta",
-            "day": DAY.isoformat(),
-            "members": [{"handle": "Bさん"}],
-        },
-    ).json()
-    awase_id = awase["awase_id"]
-    shoot_at = DAY.replace(hour=13)
-    user.post(
-        f"/api/awase/{awase_id}/shoots",
-        json={"starts_at": shoot_at.isoformat(), "place": "屋上"},
-    )
-    late_id = next(m["layer_id"] for m in awase["members"] if not m["is_organizer"])
-    user.post(
-        f"/api/awase/{awase_id}/progress",
-        json={
-            "layer_id": late_id,
-            "progress": "en_route",
-            "eta": shoot_at.replace(minute=35).isoformat(),
-            "share_location": True,
-        },
-    )
-    proposal = user.post(
-        f"/api/awase/{awase_id}/monitor", params={"now": DAY.replace(hour=12).isoformat()}
-    ).json()["proposals"][0]
-
-    member = login("Bさん")
-    assert (
-        member.post(
-            f"/api/awase/{awase_id}/proposals/{proposal['proposal_id']}/decision",
-            json={"approved": True},
-        ).status_code
-        == 403
-    )
-    assert (
-        member.post(
-            f"/api/awase/{awase_id}/shoots", json={"starts_at": shoot_at.isoformat()}
-        ).status_code
-        == 403
-    )
-    # 他人の進捗も動かせない
-    assert (
-        member.post(
-            f"/api/awase/{awase_id}/progress",
-            json={"layer_id": user.layer_id, "progress": "arrived"},
-        ).status_code
-        == 403
-    )
-
-
-def test_outsider_cannot_read_an_awase(user, login):
-    awase = user.post(
-        "/api/awase",
-        json={"title": "非公開", "event_id": "acosta", "day": DAY.isoformat()},
-    ).json()
-    stranger = login("部外者")
-    assert stranger.get(f"/api/awase/{awase['awase_id']}").status_code == 403

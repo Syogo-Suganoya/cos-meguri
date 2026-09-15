@@ -17,22 +17,9 @@ _STRINGS: dict[str, dict[str, str]] = {
     "makeup.personalized": {"ja": "この工程の個別化理由", "en": "Why this step is personalised"},
     "route.heading": {"ja": "大荷物モードの動線", "en": "Route (heavy-luggage mode)"},
     "route.penalty": {"ja": "荷物ぶんの上乗せ", "en": "Added for luggage"},
-    "dressing.heading": {"ja": "更衣室の混雑予測", "en": "Changing-room forecast"},
-    "dressing.estimate": {
-        "ja": "実測ではなくモデル値です",
-        "en": "Model estimate, not measured data",
-    },
-    "dressing.entry": {"ja": "入場のおすすめ", "en": "Suggested entry"},
-    "dressing.exit": {"ja": "撤収のおすすめ", "en": "Suggested exit"},
-    "awase.heading": {"ja": "合わせの進捗", "en": "Group progress"},
-    "awase.proposal": {"ja": "時間の変更案（主催者の返事待ち）", "en": "Reschedule proposal (awaiting organiser)"},
     "privacy.note": {
-        "ja": "顔画像は解析後に破棄しました。保持しているのは数値スコアのみです。",
-        "en": "The face image was discarded after analysis. Only numeric scores are kept.",
-    },
-    "location.note": {
-        "ja": "位置共有はイベント当日のみ有効で、終了24時間後に自動削除されます。",
-        "en": "Location sharing is day-only and is deleted automatically 24h after the event.",
+        "ja": "顔写真も位置も受け取りません。",
+        "en": "No face photos or locations are ever collected.",
     },
 }
 

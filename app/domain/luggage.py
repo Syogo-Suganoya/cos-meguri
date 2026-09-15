@@ -14,10 +14,10 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from app.domain.models import (
+    Lang,
     LuggageMode,
     RoutePlan,
     RouteSegment,
-    ServiceDisruption,
 )
 
 
@@ -35,6 +35,7 @@ def build_plan(
     mode: LuggageMode,
     arrive_by: datetime | None = None,
     depart_at: datetime | None = None,
+    lang: Lang = Lang.JA,
 ) -> RoutePlan:
     """区間列から大荷物モードの経路プランを組む。
 
@@ -61,16 +62,19 @@ def build_plan(
         plan.depart_at = depart_at
         plan.arrive_at = depart_at + timedelta(minutes=eff)
 
-    plan.warnings = _warnings(mode, transfers)
+    plan.warnings = _warnings(mode, transfers, lang)
     return plan
 
 
-def _warnings(mode: LuggageMode, transfers: int) -> list[str]:
+def _warnings(mode: LuggageMode, transfers: int, lang: Lang = Lang.JA) -> list[str]:
     out: list[str] = []
     if mode is LuggageMode.LIGHT or not transfers:
         return out
+    extra = transfers * mode.transfer_penalty_minutes
     out.append(
-        f"乗換が{transfers}回。大荷物ぶんで+{transfers * mode.transfer_penalty_minutes}分見込み"
+        f"乗換が{transfers}回。大荷物ぶんで+{extra}分見込み"
+        if lang is Lang.JA
+        else f"{transfers} transfer{'s' if transfers > 1 else ''}. Allow +{extra} min for your luggage"
     )
     return out
 
@@ -89,26 +93,3 @@ def prefer_easiest(candidates: list[RoutePlan]) -> list[RoutePlan]:
         candidates,
         key=lambda p: (p.effective_minutes, p.transfers, p.fare_yen),
     )
-
-
-def apply_disruptions(
-    plan: RoutePlan, disruptions: list[ServiceDisruption]
-) -> tuple[RoutePlan, int]:
-    """運行障害を経路に反映し、(更新後プラン, 追加遅延分) を返す。
-
-    当日モードを進めるたびにこれを通し、遅延が出ていれば経路を組み直す。
-    """
-    lines = {s.line for s in plan.segments}
-    hit = [d for d in disruptions if d.line in lines]
-    if not hit:
-        return plan, 0
-
-    delay = sum(d.delay_minutes for d in hit)
-    updated = plan.model_copy(deep=True)
-    updated.effective_minutes += delay
-    if updated.arrive_at and updated.depart_at:
-        # 到着時刻を守る前提なら出発を前倒しする
-        updated.depart_at = updated.arrive_at - timedelta(minutes=updated.effective_minutes)
-    for d in hit:
-        updated.warnings.append(f"{d.line}: {d.status}（+{d.delay_minutes}分）{d.detail}")
-    return updated, delay

@@ -21,10 +21,10 @@
   --line: #0b0b10;
 
   /* 節の色。くすんだ色は入れない（オレンジと深緑を外したのはそのため） */
-  --c1: #ff0060; --c1-on: #ffffff;   /* 準備 — マゼンタ */
+  --c1: #ff0060; --c1-on: #ffffff;   /* メイク — マゼンタ */
   --c2: #00e5ff; --c2-on: #0b0b10;   /* プラン — シアン */
   --c3: #7b2bff; --c3-on: #ffffff;   /* できあがり — バイオレット */
-  --c4: #d9ff00; --c4-on: #0b0b10;   /* 当日 — アシッドイエロー */
+  --c4: #d9ff00; --c4-on: #0b0b10;   /* アシッドイエロー（注意の印・3番目の手順） */
   --c5: #00ff87; --c5-on: #0b0b10;   /* ネオンミント（完了・OK の状態色） */
 
   --accent: #d9ff00;
@@ -60,9 +60,8 @@
 .p-home    { --hue: var(--c1); --on: var(--c1-on); }
 .p-login   { --hue: var(--c1); --on: var(--c1-on); }
 .p-ask     { --hue: var(--c5); --on: var(--c5-on); }
-.p-prep    { --hue: var(--c1); --on: var(--c1-on); }
 .p-plan    { --hue: var(--c2); --on: var(--c2-on); }
-.p-day     { --hue: var(--c4); --on: var(--c4-on); }
+.p-me      { --hue: var(--c3); --on: var(--c3-on); }
 
 /* ---------------------------------------------------------------- 2. 地 */
 
@@ -84,6 +83,10 @@ body {
 }
 
 .hidden { display: none !important; }
+/* 英語の人に日本語の原文を一瞬見せない（各ページの <head> が付け、core/i18n.js が外す） */
+.i18n-pending body { visibility: hidden; }
+/* hidden 属性も必ず効かせる（display を持つ部品が上書きして、隠したはずの案内が出ていた） */
+[hidden] { display: none !important; }
 
 :focus-visible {
   outline: 3px solid var(--accent);
@@ -123,16 +126,6 @@ body {
 
 .top-right { display: flex; align-items: center; gap: 8px; }
 
-/* 誰として入っているかを添える。「ログアウト」が何から出るのかを分からせる */
-.who {
-  font-size: 0.8rem;
-  font-weight: 700;
-  max-width: 12ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .lang-switch { display: flex; }
 .lang {
   background: transparent;
@@ -147,32 +140,6 @@ body {
 .lang:last-child { border-left: 0; }
 .lang.active { background: var(--accent); border-color: var(--accent); color: var(--ink); }
 
-.bell {
-  position: relative;
-  background: transparent;
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  color: var(--header-fg);
-  border-radius: 50%;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  cursor: pointer;
-}
-.bell:hover { background: var(--accent); }
-.badge {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  background: var(--c1);
-  color: #fff;
-  border-radius: var(--r-pill);
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  font-weight: 700;
-  min-width: 19px;
-  padding: 0 5px;
-  line-height: 1.7;
-}
 
 .top-right button.ghost {
   border: 2px solid rgba(255, 255, 255, 0.45);
@@ -180,6 +147,18 @@ body {
   background: transparent;
 }
 .top-right button.ghost:hover { background: var(--header-fg); color: var(--header-bg); border-color: var(--header-fg); }
+
+/* 看板の右端。ゲストにはログインと新規登録を出す（お気に入りへのいちばん静かな案内） */
+.top-account { display: flex; align-items: center; gap: 6px; }
+.top-signup {
+  padding: 4px 12px;
+  font-size: 0.74rem;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+  box-shadow: none;
+}
+.top-signup:hover { box-shadow: none; }
 
 /* ---- 左端のシェブロン ---- */
 
@@ -232,9 +211,7 @@ body {
 .rail-step[data-done][aria-current] .n { color: inherit; }
 
 .rail-step[data-step="ask"]     { --sc: var(--c5); --sc-on: var(--c5-on); }
-.rail-step[data-step="prep"]    { --sc: var(--c1); --sc-on: var(--c1-on); }
 .rail-step[data-step="plan"]    { --sc: var(--c2); --sc-on: var(--c2-on); }
-.rail-step[data-step="day"]     { --sc: var(--c4); --sc-on: var(--c4-on); }
 
 .rail-step:hover { background: var(--ink); color: var(--paper); }
 .rail-step:hover .n { opacity: 0.7; }
@@ -258,8 +235,7 @@ main {
   align-content: start;
 }
 
-body:has(.rail) main,
-body:has(.rail) footer { margin-left: var(--rail-w); }
+body:has(.rail) main { margin-left: var(--rail-w); }
 
 .page-title {
   font-size: clamp(2.1rem, 5vw, 2.9rem);
@@ -468,6 +444,8 @@ button.ghost:hover { transform: none; box-shadow: none; background: var(--ink); 
   background: var(--wash);
 }
 .summary .fig { display: grid; gap: 2px; }
+/* ☆ は数字の並びの右端に寄せる。折り返したときは行頭に落ちる */
+.summary-tail { margin-left: auto; align-self: center; }
 .summary .fig b {
   font-size: 1.45rem;
   font-weight: 900;
@@ -610,157 +588,105 @@ button.ghost:hover { transform: none; box-shadow: none; background: var(--ink); 
 .fit b { font-size: 0.95rem; font-weight: 900; }
 .fit small { color: var(--ink-2); }
 
-/* 混雑グラフ */
-.bars { display: grid; gap: 4px; margin-top: 14px; }
-.bar {
-  display: grid;
-  grid-template-columns: 48px 1fr 82px;
-  gap: 10px;
+
+/* ---- お気に入り ---- */
+
+.fav {
+  display: inline-flex;
   align-items: center;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-/* track も fill も span。幅と高さを効かせるためにブロック化する */
-.bar .track { display: block; background: var(--paper); border: var(--edge); height: 16px; overflow: hidden; }
-.bar .fill { display: block; height: 100%; background: var(--c2); }
-.bar .fill.peak { background: var(--c1); }
-.bar .mark { color: var(--ink); text-align: right; }
-.bar.rec .time { background: var(--accent); border: var(--edge); text-align: center; }
-.bar.rec .fill { background: var(--accent); }
-
-
-footer {
-  border-top: var(--edge);
-  padding: 24px 22px 44px;
-  color: var(--ink-2);
+  gap: 6px;
+  padding: 7px 15px;
   font-size: 0.8rem;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.fav span { font-size: 1.05rem; line-height: 1; }
+.fav[aria-pressed="true"] { background: var(--c4); color: var(--c4-on); }
+
+.tab .count {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
   text-align: center;
 }
 
-/* ---- お知らせ ---- */
-
-.inbox {
-  position: fixed;
-  top: calc(var(--header-h) + 10px);
-  right: 14px;
-  width: min(372px, calc(100vw - 28px));
-  max-height: 72vh;
-  overflow-y: auto;
-  background: var(--paper);
-  border: 3px solid var(--ink);
-  border-radius: var(--r-card);
-  padding: 18px;
-  z-index: 40;
-  box-shadow: 10px 10px 0 var(--c1);
-}
-.inbox-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.inbox-head h3 { margin: 0; font-size: 1.05rem; font-weight: 900; letter-spacing: -0.03em; }
-.inbox-list { display: grid; gap: 10px; margin-top: 14px; }
-
-.ntf {
-  border: var(--edge);
-  border-radius: var(--r-chip);
-  padding: 11px 14px;
-  font-size: 0.85rem;
-}
-.ntf.unread { border-left-width: 10px; border-left-color: var(--c1); }
-.ntf-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.ntf-head .min {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  color: var(--ink-2);
-  font-size: 0.74rem;
-}
-.ntf p { margin: 0; }
-
-/* ---- 相談（/ask の会話） ---- */
-
-.chat-log {
+.fav-list { gap: 16px; }
+/* マイページから相談・プランへ。帯を出さない代わりの行き先 */
+.page-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: -6px; }
+.fav-item {
   display: grid;
-  gap: 10px;
-  align-content: start;
-  max-height: 40vh;
-  min-height: 0;
-  overflow-y: auto;
-  margin-top: 16px;
-  padding: 14px;
-  background: var(--wash);
+  gap: 12px;
+  padding: 18px 20px;
   border: var(--edge);
   border-radius: var(--r-card);
+  background: var(--paper);
 }
+.fav-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
+.fav-head h3 { margin: 0; font-size: 1rem; font-weight: 900; letter-spacing: -0.02em; }
+.fav-date { font-size: 0.74rem; color: var(--ink-2); font-family: var(--font-mono); }
+.fav-item details summary { cursor: pointer; font-size: 0.84rem; font-weight: 900; }
+.fav-item details[open] summary { margin-bottom: 10px; }
+.fav-item .actions { margin-top: 0; justify-content: flex-end; }
+button.danger { background: var(--c1); color: #fff; border-color: var(--ink); }
 
-.bubble {
-  max-width: 88%;
-  padding: 10px 14px;
-  font-size: 0.86rem;
-  line-height: 1.75;
-  white-space: pre-wrap;
-  border: var(--edge);
-}
-.bubble.agent { justify-self: start; background: var(--paper); border-radius: 18px 18px 18px 5px; }
-.bubble.user {
-  justify-self: end;
-  background: var(--c1);
-  color: #fff;
-  font-weight: 700;
-  border-radius: 18px 18px 5px 18px;
-  box-shadow: 3px 3px 0 var(--ink);
-}
-.bubble.pending { opacity: 0.45; }
+/* ヘッダーのマイページ。ログアウトと並ぶので、ボタンではなく文字のリンクにして重さを分ける */
+.top-link { color: var(--header-fg); font-size: 0.8rem; font-weight: 900; text-decoration: none; padding: 4px 6px; white-space: nowrap; }
+.top-link:hover, .top-link[aria-current] { text-decoration: underline; text-underline-offset: 4px; }
 
-/* まだ埋まっていない欄。数だけ言われても、どれかは分からない */
-label[data-needed] { color: var(--hue); font-weight: 900; }
-label[data-needed] input,
-label[data-needed] select { border-color: var(--hue); box-shadow: 3px 3px 0 var(--hue); }
-label[data-needed]::after {
-  content: "まだ";
-  margin-left: 8px;
-  font-size: 0.68rem;
+/* ---- フォームの誤り ----
+   出す場所は2つだけ（dom.js）。欄の誤りは欄の真下、それ以外はフォームの頭。
+   どちらも同じ赤で、枠の色だけで伝えずに文を添える */
+
+.form-alert { margin: 4px 0 18px; }
+.form-alert .msg { font-weight: 700; }
+.form-alert .msg.error { background: color-mix(in srgb, var(--c1) 7%, var(--paper)); }
+.form-alert .msg.ok { background: color-mix(in srgb, var(--c5) 14%, var(--paper)); }
+.form-alert .msg.alert { background: color-mix(in srgb, var(--c4) 22%, var(--paper)); }
+.form-alert a { color: var(--ink); font-weight: 900; margin-left: 6px; }
+
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--c1);
+  box-shadow: 3px 3px 0 var(--c1);
+  background: color-mix(in srgb, var(--c1) 5%, var(--paper));
+}
+.field-error {
+  margin: 0;
+  color: #d4004f; /* --c1 だと細字の読みやすさが足りないので、少し沈めた赤 */
+  font-size: 0.8rem;
   font-weight: 900;
-  padding: 0 8px;
-  border: var(--edge);
-  border-radius: var(--r-pill);
-  background: var(--hue);
-  color: var(--on);
+  letter-spacing: 0;
+  line-height: 1.5;
 }
+.field-error::before { content: "！"; margin-right: 4px; }
 
 /* ページの末尾に置く行き先の案内 */
 .page-note { margin: 0; font-size: 0.88rem; color: var(--ink-2); }
+
+/* 開始と終了は1マスに並べる（狭い画面でも隣り合わせのまま） */
+.time-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 700px) { .grid .time-pair { grid-column: span 2; } }
+
+/* ゲストへの案内。ログインすると何ができるかを1行で言い、入口を2つ添える */
+.guest-promo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 14px 18px;
+  border: var(--edge);
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--c4) 20%, var(--paper));
+}
+.guest-promo p { margin: 0; flex: 1 1 260px; font-size: 0.88rem; font-weight: 700; line-height: 1.6; }
+.guest-promo .promo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.guest-promo .btn { padding: 7px 16px; font-size: 0.8rem; box-shadow: 3px 3px 0 var(--ink); }
 .page-note a { color: var(--ink); font-weight: 900; }
-
-/* 相談の入力。長く書けるように textarea にする */
-.ask { display: grid; gap: 12px; }
-.ask textarea {
-  width: 100%;
-  resize: vertical;
-  min-height: 84px;
-  font: inherit;
-  line-height: 1.7;
-}
-.ask .actions { margin-top: 0; align-items: center; }
-.ask .actions button[type="submit"] { min-width: 9em; }
-
-.chat-reset {
-  flex: none;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--ink-2);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 4px 2px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.chat-reset:hover:not(:disabled) {
-  background: transparent;
-  color: var(--ink);
-  transform: none;
-  box-shadow: none;
-}
 
 /* ---------------------------------------------------------------- 5. ページ別 */
 
@@ -865,6 +791,10 @@ label[data-needed]::after {
   transform: rotate(-2deg);
 }
 .hero-lead { margin: 0 0 22px; font-size: 1rem; max-width: 34em; }
+/* 改行は PC の2行組みのためのもの。狭い画面で残すと「入れ／るだけで」のように途中で折れる */
+@media (max-width: 560px) { .hero-lead br { display: none; } }
+/* 対応ブラウザでは文節の切れ目で折る（「入れ／るだけで」を避ける） */
+.hero-lead, .hero-title, .howto-list li, .feature p { word-break: auto-phrase; }
 .hero-chips { display: flex; flex-wrap: wrap; gap: 10px; }
 /* 入口はボタン1つ。開発用ログインはコス名だけで成立するのでフォームは置かない */
 .hero-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
@@ -949,12 +879,12 @@ label[data-needed]::after {
 }
 
 /* 1枚目: 下の縁を横切る太い帯 + 左上の小粒 */
-.f-prep::before {
+.f-makeup::before {
   left: -10px; bottom: 26px; width: 190px; height: 46px;
   border-radius: 52% 48% 38% 62% / 60% 40% 60% 40%;
   transform: rotate(-7deg);
 }
-.f-prep::after {
+.f-makeup::after {
   left: 128px; top: 26px; width: 26px; height: 22px;
   border-radius: 50%;
   box-shadow: 26px 22px 0 -3px currentColor, 8px 46px 0 -7px currentColor;
@@ -962,24 +892,15 @@ label[data-needed]::after {
 }
 
 /* 2枚目: 右下に大きく1つだけ */
-.f-plan::before {
+.f-route::before {
   right: -18px; bottom: -12px; width: 168px; height: 132px;
   border-radius: 42% 58% 30% 70% / 56% 44% 56% 44%;
   transform: rotate(13deg);
 }
-.f-plan::after { display: none; }
+.f-route::after { display: none; }
 
 
-/* 3枚目: 中央を斜めに横切る太い一本 */
-.f-day::before {
-  left: 10%; top: 40%; width: 120%; height: 54px;
-  border-radius: 46% 54% 52% 48% / 60% 40% 60% 40%;
-  transform: rotate(-24deg);
-  opacity: 0.12;
-}
-.f-day::after { display: none; }
-
-/* 4枚目: 何も敷かない。1枚くらい素のままがあっていい */
+/* 3枚目: 何も敷かない。1枚くらい素のままがあっていい */
 .f-privacy::before,
 .f-privacy::after { display: none; }
 
@@ -1024,21 +945,15 @@ label[data-needed]::after {
   border: var(--edge);
   z-index: 1;
 }
-.f-prep    .feature-step { background: var(--c1); color: var(--c1-on); }
-.f-plan    .feature-step { background: var(--c2); color: var(--c2-on); }
-.f-day     .feature-step { background: var(--c4); color: var(--c4-on); }
-.f-privacy .feature-step { background: var(--c3); color: var(--c3-on); }
-.f-prep    { box-shadow: 9px 9px 0 var(--c1); }
-.f-plan    { box-shadow: 9px 9px 0 var(--c2); }
-.f-day     { box-shadow: 9px 9px 0 var(--c4); }
-.f-privacy { box-shadow: 9px 9px 0 var(--c3); }
+.f-makeup   .feature-step { background: var(--c1); color: var(--c1-on); }
+.f-route    .feature-step { background: var(--c2); color: var(--c2-on); }
+.f-privacy  .feature-step { background: var(--c3); color: var(--c3-on); }
+.f-makeup   { box-shadow: 9px 9px 0 var(--c1); }
+.f-route    { box-shadow: 9px 9px 0 var(--c2); }
+.f-privacy  { box-shadow: 9px 9px 0 var(--c3); }
 
-
-.f-day::before     { background: var(--c4); }
-
-.f-prep::before, .f-prep::after   { background: currentColor; color: var(--c1); }
-.f-plan::before                   { background: currentColor; color: var(--c2); }
-.f-day::before                    { background: currentColor; color: var(--c4); }
+.f-makeup::before, .f-makeup::after { background: currentColor; color: var(--c1); }
+.f-route::before                    { background: currentColor; color: var(--c2); }
 
 /* ---- 対応イベントのリボン ---- */
 
@@ -1100,12 +1015,23 @@ label[data-needed]::after {
 .howto-list li:nth-child(1)::before { background: var(--c1); color: #fff; transform: rotate(-6deg); }
 .howto-list li:nth-child(2)::before { background: var(--c2); transform: rotate(5deg); }
 .howto-list li:nth-child(3)::before { background: var(--c4); transform: rotate(-4deg); }
-.howto-list li:nth-child(4)::before { background: var(--c5); transform: rotate(6deg); }
 .howto-list b { font-weight: 900; }
+.lower-cta { margin-top: 30px; }
 
 .login-card { max-width: 540px; }
 .login-card h2 { font-size: 1.7rem; letter-spacing: -0.045em; }
-.login-card .actions button { flex: 1; padding: 13px 20px; }
+/* 入力欄は1列に積む。ボタンは欄の幅に広げず、押す場所として小さくまとめる */
+.login-form { display: grid; gap: 16px; max-width: 420px; }
+.login-form .actions { margin-top: 4px; }
+.login-form .actions button { min-width: 10em; }
+.login-switch {
+  margin: 22px 0 0;
+  padding-top: 18px;
+  border-top: 2px dashed color-mix(in srgb, var(--ink) 25%, transparent);
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+.login-switch a { color: var(--ink); font-weight: 900; margin-left: 4px; }
 
 /* ---------------------------------------------------------------- 6. レスポンシブ */
 
@@ -1160,8 +1086,7 @@ label[data-needed]::after {
     padding-left: 20px;
     clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
   }
-  body:has(.rail) main,
-  body:has(.rail) footer { margin-left: 0; }
+  body:has(.rail) main { margin-left: 0; }
 }
 
 @media (max-width: 560px) {
@@ -1171,12 +1096,30 @@ label[data-needed]::after {
   .lang { padding: 3px 8px; font-size: 0.66rem; }
   .top-right { gap: 6px; }
   .top-right button.ghost { font-size: 0.72rem; padding: 4px 9px; }
-  .who { display: none; }
+  .top-link { font-size: 0.72rem; padding: 4px 2px; }
+  .top-signup { font-size: 0.7rem; padding: 4px 9px; }
   main { padding: 22px 16px 96px; }
   .card { padding: 22px 18px 24px; }
-  /* 狭い画面は1列。飾りは見出しの上に帯として置き、本文には重ねない */
-  .drop-a, .arc { display: none; }
-  .inbox { right: 8px; }
+  /* スマホではヒーローの飾り（インクの飛沫）を出さない。見出しから始める
+     （飾りの帯が1画面目の上を占めて、見出しと「使ってみる」が下へ押し出されていた） */
+  .deco { display: none; }
+}
+
+.lang-short { display: none; }
+
+/* 看板に言語・ログイン・新規登録（マイページ・ログアウト）が並ぶと 375px に収まらない。
+   ロゴの文字は消さず、言語の表記を JA / EN に縮める */
+@media (max-width: 420px) {
+  .brand { gap: 6px; }
+  .brand-name { font-size: 0.95rem; }
+  .lang { padding: 3px 7px; }
+  .lang-long { display: none; }
+  .lang-short { display: inline; }
+}
+
+/* それでも入らない幅（320px 前後）だけ、ロゴの文字を外す */
+@media (max-width: 350px) {
+  .brand-name { display: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1184,6 +1127,5 @@ label[data-needed]::after {
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 }
 @media (prefers-reduced-motion: reduce) {
-  .chat { transition: none; }
   button:hover:not(:disabled), .btn:hover, button:active:not(:disabled) { transform: none; }
 }

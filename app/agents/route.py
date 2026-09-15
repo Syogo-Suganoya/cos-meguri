@@ -1,7 +1,7 @@
-"""動線エージェント（設計書 §4）。再計算・通知は自律。
+"""動線エージェント（設計書 §4）。
 
 一般の経路案内との違いは、候補の選び方にある。所要時間の最短ではなく
-「EV被覆 → 体感時間 → 運賃」の順で選ぶ（大荷物ユーザーの実際の負担順）。
+「体感時間（乗換ぶんを足したもの） → 乗換 → 運賃」の順で選ぶ（大荷物ユーザーの実際の負担順）。
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.domain import luggage
-from app.domain.models import LuggageMode, RoutePlan, jst_hm
+from app.domain.models import Lang, LuggageMode, RoutePlan
 from app.ports.llm import LlmPort
 from app.ports.transit import TransitPort
 
@@ -26,15 +26,18 @@ class RouteAgent:
         to_station: str,
         arrive_by: datetime,
         mode: LuggageMode,
+        lang: Lang = Lang.JA,
     ) -> RoutePlan:
         raw_routes = await self.transit.search(
             from_station=from_station, to_station=to_station, arrive_by=arrive_by
         )
         plans = [
-            luggage.build_plan(segments, direction="outbound", mode=mode, arrive_by=arrive_by)
+            luggage.build_plan(segments, direction="outbound", mode=mode, arrive_by=arrive_by, lang=lang)
             for segments in raw_routes
         ]
-        return luggage.prefer_easiest(plans)[0] if plans else _empty("outbound", mode)
+        if not plans:
+            return _empty("outbound", mode, lang)
+        return await self._mark_estimated(luggage.prefer_easiest(plans)[0], from_station, to_station, lang)
 
     async def plan_return(
         self,
@@ -43,15 +46,52 @@ class RouteAgent:
         to_station: str,
         depart_at: datetime,
         mode: LuggageMode,
+        lang: Lang = Lang.JA,
     ) -> RoutePlan:
         raw_routes = await self.transit.search(
             from_station=from_station, to_station=to_station, depart_at=depart_at
         )
         plans = [
-            luggage.build_plan(segments, direction="return", mode=mode, depart_at=depart_at)
+            luggage.build_plan(segments, direction="return", mode=mode, depart_at=depart_at, lang=lang)
             for segments in raw_routes
         ]
-        return luggage.prefer_easiest(plans)[0] if plans else _empty("return", mode)
+        if not plans:
+            return _empty("return", mode, lang)
+        return await self._mark_estimated(luggage.prefer_easiest(plans)[0], from_station, to_station, lang)
+
+    async def _mark_estimated(
+        self, plan: RoutePlan, from_station: str, to_station: str, lang: Lang = Lang.JA
+    ) -> RoutePlan:
+        """駅すぱあとで引けず目安に落ちた経路には、駅名を確かめるよう添える。
+
+        駅名が曖昧（「大宮」）なら正式な候補も添える。候補から選び直せば本物の経路が引ける。
+        """
+        if not any(seg.estimated for seg in plan.segments):
+            return plan
+        ja = lang is Lang.JA
+        hints = []
+        for station in dict.fromkeys((from_station, to_station)):
+            candidates = await self.transit.suggest_stations(station, limit=4)
+            if candidates and station not in candidates:
+                hints.append(
+                    f"「{station}」は {'・'.join(candidates)} のどれかを選んでください"
+                    if ja
+                    else f'For "{station}", pick one of: {", ".join(candidates)}'
+                )
+        if ja:
+            message = (
+                f"「{from_station}」→「{to_station}」の経路を駅すぱあとで引けませんでした。"
+                + ("。".join(hints) if hints else "駅名を確かめてください")
+                + "（ここに出ているのは目安の経路です）。"
+            )
+        else:
+            message = (
+                f'Couldn\'t find a route from "{from_station}" to "{to_station}" on Ekispert. '
+                + (". ".join(hints) if hints else "Check the station names")
+                + " (the route shown is only an estimate)."
+            )
+        plan.warnings.insert(0, message)
+        return plan
 
     async def alternatives(
         self,
@@ -71,38 +111,10 @@ class RouteAgent:
         ]
         return luggage.prefer_easiest(plans)
 
-    async def recheck(self, plan: RoutePlan) -> tuple[RoutePlan, int, str | None]:
-        """当日モードの自律再計算。(更新後, 追加遅延, 通知文) を返す。
 
-        遅延が無ければ通知文は None（無用な通知を飛ばさない）。
-        """
-        # 引けるかどうかは叩いてみないと分からない（契約に含まれないことがある）。
-        # 呼んだあとに supports_disruptions を見て、当日ページの文面を分ける
-        lines = sorted({s.line for s in plan.segments})
-        disruptions = await self.transit.disruptions(lines)
-        updated, delay = luggage.apply_disruptions(plan, disruptions)
-        if delay <= 0:
-            return updated, 0, None
-
-        fallback = (
-            f"{'・'.join(d.line for d in disruptions)}の遅延で+{delay}分。"
-            + (
-                f"出発を{jst_hm(updated.depart_at)}に前倒ししてください。"
-                if updated.depart_at
-                else "出発を前倒ししてください。"
-            )
-        )
-        message = await self.llm.explain(
-            "大荷物のコスプレイヤー向けに、次の遅延情報を1〜2文で伝えてください。"
-            f"遅延: {[d.model_dump() for d in disruptions]} / 追加所要: {delay}分",
-            fallback=fallback,
-        )
-        return updated, delay, message
-
-
-def _empty(direction: str, mode: LuggageMode) -> RoutePlan:
+def _empty(direction: str, mode: LuggageMode, lang: Lang = Lang.JA) -> RoutePlan:
     return RoutePlan(
         direction=direction,  # type: ignore[arg-type]
         luggage_mode=mode,
-        warnings=["経路が取得できませんでした"],
+        warnings=["経路が取得できませんでした" if lang is Lang.JA else "Couldn't get a route"],
     )

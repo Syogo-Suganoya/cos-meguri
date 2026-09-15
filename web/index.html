@@ -3,14 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>コスめぐり — レイヤーの一日エージェント</title>
+<title data-i18n="コスめぐり — レイヤーの一日エージェント">コスめぐり — レイヤーの一日エージェント</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=53">
+<!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
+     スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
+<script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
+<link rel="stylesheet" href="/static/style.css?v=76">
 </head>
 <body class="p-home">
+<!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
+<header class="top" data-authed></header>
 
 <main>
   <section class="hero">
@@ -43,19 +48,19 @@
     </div>
 
     <div class="hero-text">
-      <p class="eyebrow">レイヤーの一日エージェント</p>
-      <h1 class="hero-title">遠征の<em>ぜんぶ</em>を、<br>ひとつの相談窓口に。</h1>
-      <p class="hero-lead">
-        「9/6のコミケに横浜駅から行きます。大荷物です」。<br>
-        そう書くだけで、メイクの工程から更衣室の時間、帰りの動線までを組み立てます。
+      <p class="eyebrow" data-i18n="レイヤーの一日エージェント">レイヤーの一日エージェント</p>
+      <h1 class="hero-title" data-i18n-html="home.hero.title">遠征の<em>ぜんぶ</em>を、<br>ひとつの相談窓口に。</h1>
+      <p class="hero-lead" data-i18n-html="home.hero.lead">
+        イベント・日付・キャラ・出発駅・荷物を入れるだけで、<br>
+        メイクの工程から行き帰りの動線までを組み立てます。
       </p>
       <div class="hero-chips">
-        <span class="chip">本名も素顔も預かりません</span>
-        <span class="chip">LINEもXも使いません</span>
-        <span class="chip">顔写真は受け取りません</span>
+        <span class="chip" data-i18n="本名も素顔も預かりません">本名も素顔も預かりません</span>
+        <span class="chip" data-i18n="顔写真は受け取りません">顔写真は受け取りません</span>
+        <span class="chip" data-i18n="位置は受け取りません">位置は受け取りません</span>
       </div>
       <div class="hero-cta">
-        <a id="btn-start" class="btn primary" href="/login">使ってみる</a>
+        <a id="btn-start" class="btn primary" href="/ask" data-i18n="使ってみる">使ってみる</a>
       </div>
     </div>
   </section>
@@ -68,35 +73,28 @@
 
 <section class="band">
   <div class="band-inner">
-    <h2 class="section-title on-dark">こんなときに<span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
+    <h2 class="section-title on-dark"><span data-i18n="こんなときに">こんなときに</span><span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
 
     <div class="feature-grid">
-      <article class="feature f-prep">
+      <article class="feature f-makeup">
         <span class="feature-step">1</span>
         <span class="ghost-no" aria-hidden="true">01</span>
-        <h3>キャラのメイク、<br>どこから手を付ければいいのか</h3>
-        <p>キャラの髪色・瞳色から、ベースからウィッグ際まで9工程に分けて順番に出します。肌の明るさは変えず、光と影で色味に寄せます。</p>
+        <h3 data-i18n-html="home.feature.makeup.title">キャラのメイク、<br>どこから手を付ければいいのか</h3>
+        <p data-i18n-html="home.feature.makeup.body">キャラの髪色・瞳色から、ベースからウィッグ際まで9工程に分けて順番に出します。肌の明るさは変えず、光と影で色味に寄せます。</p>
       </article>
 
-      <article class="feature f-plan">
+      <article class="feature f-route">
         <span class="feature-step">2</span>
         <span class="ghost-no" aria-hidden="true">02</span>
-        <h3>大荷物なのに、<br>乗換だらけの経路を案内された</h3>
-        <p>最短ではなく乗換の少ない順に選び、乗換の余裕を最大にした経路を頼みます。乗換は体感の時間に足すので、着く時刻がずれません。</p>
-      </article>
-
-      <article class="feature f-day">
-        <span class="feature-step">3</span>
-        <span class="ghost-no" aria-hidden="true">03</span>
-        <h3>電車が遅れて、<br>合わせの時間に間に合わない</h3>
-        <p>遅れを見て動線を組み直し、撮影の時間をずらす案まで出します。決めるのは主催者で、勝手には動かしません。</p>
+        <h3 data-i18n-html="home.feature.route.title">大荷物なのに、<br>乗換だらけの経路を案内された</h3>
+        <p data-i18n-html="home.feature.route.body">乗換のたびに荷物ぶんの時間を足してから比べるので、乗換だらけの経路は選ばれにくくなります。足した時間で出発を逆算するので、着く時刻もずれません。</p>
       </article>
 
       <article class="feature f-privacy">
-        <span class="feature-step">4</span>
-        <span class="ghost-no" aria-hidden="true">04</span>
-        <h3>顔写真を預けるのが、<br>そもそも不安</h3>
-        <p>顔写真を受け取る機能そのものがありません。位置の共有はイベントの当日だけで、終わって24時間で無効になります。</p>
+        <span class="feature-step">3</span>
+        <span class="ghost-no" aria-hidden="true">03</span>
+        <h3 data-i18n-html="home.feature.privacy.title">顔写真を預けるのが、<br>そもそも不安</h3>
+        <p data-i18n-html="home.feature.privacy.body">顔写真も位置も、受け取る機能そのものがありません。アプリに入るのは、プランを組むための条件だけ。名前も登録しません。</p>
       </article>
     </div>
   </div>
@@ -125,23 +123,25 @@
 <!-- 対応イベントのリボン。帯だけを画面の外へ逃がし、文字は切らない -->
 <div class="ribbon">
   <p class="ribbon-inner">
-    <span>コミックマーケット</span><i aria-hidden="true">◆</i><span>acosta!</span><i aria-hidden="true">◆</i><span>世界コスプレサミット</span><i aria-hidden="true">◆</i><span>ホココス</span>
+    <span data-i18n="コミックマーケット">コミックマーケット</span><i aria-hidden="true">◆</i><span>acosta!</span><i aria-hidden="true">◆</i><span data-i18n="世界コスプレサミット">世界コスプレサミット</span><i aria-hidden="true">◆</i><span data-i18n="ホココス">ホココス</span>
   </p>
 </div>
 
 <main class="lower">
   <section class="howto">
-    <h2 class="section-title">使い方<span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
+    <h2 class="section-title"><span data-i18n="使い方">使い方</span><span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
     <ol class="howto-list">
-      <li><b>「使ってみる」を押す。</b>コス名だけで入れます。メールも本名もいりません（本番はメールとパスワードで入ります）。</li>
-      <li><b>「相談」で条件をそろえる。</b>イベント・日付・作品・キャラ・出発駅・荷物の6つ。まとめて書いても、欄をひとつずつ埋めても構いません。</li>
-      <li><b>できたプランを「プラン」で見る。</b>メイクの工程・動線・更衣室の3つに分かれています。直したくなったら「相談」へ戻ります。</li>
-      <li><b>当日は「当日」を開いて押す。</b>そのときの遅れと片づけの時刻を調べます（自動では動きません）。</li>
+      <li data-i18n-html="home.howto.1"><b>「相談」で欄を埋める。</b>イベント名・日付・目的地・時間・作品・キャラ・出発駅・荷物。コミケなどは目的地と時間を自動で入れます。地元のイベントも、目的地（最寄り駅）と時間を入れれば組めます。</li>
+      <li data-i18n-html="home.howto.2"><b>「プラン」で見る。</b>メイクの工程と動線の2つに分かれています。直したくなったら「相談」で1つだけ変えて組み直せます。</li>
+      <li data-i18n-html="home.howto.3"><b>気に入ったら ☆ で残す。</b>ログインすると、メイクの工程と動線をお気に入りに保存して、マイページでいつでも見返せます。ログインする前に組んだプランも、そのまま引き継ぎます。</li>
     </ol>
+    <!-- 読み終えた人が上まで戻らなくていいように、入口をもう1つ置く -->
+    <div class="hero-cta lower-cta">
+      <a class="btn primary" href="/ask" data-i18n="使ってみる">使ってみる</a>
+    </div>
   </section>
-
 </main>
 
-<script type="module" src="/static/js/pages/home.js?v=53"></script>
+<script type="module" src="/static/js/pages/home.js?v=76"></script>
 </body>
 </html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="マイページ — コスめぐり">マイページ — コスめぐり</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b10">
+<!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
+     スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
+<script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
+<link rel="stylesheet" href="/static/style.css?v=76">
+</head>
+<body class="p-me">
+<!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
+<header class="top" data-authed></header>
+
+<main>
+  <h1 class="page-title" data-i18n="マイページ">マイページ</h1>
+  <!-- 帯は出さないので、行き先はここに置く -->
+  <nav class="page-links" aria-label="ほかの画面へ" data-i18n-aria-label="ほかの画面へ">
+    <a class="btn" href="/ask" data-i18n="相談をひらく">相談をひらく</a>
+    <a class="btn" href="/plan" data-i18n="プランをひらく">プランをひらく</a>
+  </nav>
+
+  <section class="card">
+    <h2 data-i18n="お気に入り">お気に入り</h2>
+    <!-- 消した結果や読み込みの失敗はここ1か所 -->
+    <div id="form-alert" class="form-alert" role="status" hidden></div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="makeup"><span data-i18n="メイクの工程">メイクの工程</span><span class="count" id="count-makeup">0</span></button>
+      <button class="tab" data-tab="route"><span data-i18n="動線">動線</span><span class="count" id="count-route">0</span></button>
+    </div>
+    <div id="pane-makeup" class="pane fav-list"></div>
+    <div id="pane-route" class="pane fav-list hidden"></div>
+  </section>
+</main>
+
+<script type="module" src="/static/js/pages/me.js?v=76"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
-"""Orchestrator（設計書 §4）。遠征計画の受付と、当日モードの進行管理。
+"""Orchestrator（設計書 §4）。遠征計画の受付。
 
-計画フェーズは対話（ユーザーの確定を待つ）、当日フェーズは自律進行。
-各サブエージェントの結果を Expedition に束ね、Firestore に保存する。
+条件を受け取り、各サブエージェントの結果を Expedition に束ねて保存する。
+当日モード（遅延の再計算・撤収の通知・合わせの到着監視）は取り下げた。
 """
 
 from __future__ import annotations
@@ -11,61 +11,62 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from app.agents.awase import AwaseAgent
-from app.agents.dressing import DressingAgent
 from app.agents.i18n import I18nAgent
 from app.agents.makeup import MakeupAgent
 from app.agents.route import RouteAgent
 from app.domain.events import get_event
 from app.domain.models import (
-    JST,
+    CUSTOM_EVENT_ID,
     CharacterRef,
     EventRef,
     Expedition,
     ExpeditionStatus,
     Lang,
-    Layer,
     LuggageMode,
-    NotificationKind,
     event_day,
 )
-from app.ports.notifier import NotifierPort
 from app.ports.repository import RepositoryPort
 
 logger = logging.getLogger(__name__)
 
-# 会場到着から撮影開始までに要る余裕（着替え＋メイク直し）
-VENUE_BUFFER_MINUTES = 30
+class PlanError(ValueError):
+    """条件が組めない形をしている（終了が開始より前など）。field はどの欄の誤りか。
+
+    code は画面が自分の言語で言い直すための印（ends_before_starts / bad_time）。
+    """
+
+    def __init__(self, message: str, field: str, code: str) -> None:
+        super().__init__(message)
+        self.field = field
+        self.code = code
 
 
 @dataclass
 class PlanRequest:
+    """組む条件。イベントは名前・目的地（最寄り駅）・開始・終了（HH:MM、JST）で受ける。
+
+    収載イベントかどうかは問わない（event_id は当たったときの控え）。
+    """
+
     layer_id: str
-    event_id: str
+    event_name: str
+    destination_station: str
+    starts_time: str
+    ends_time: str
     day: datetime
     character: CharacterRef
     origin_station: str
+    event_id: str | None = None
     luggage_mode: LuggageMode = LuggageMode.CARRY
     lang: Lang = Lang.JA
-    attendance_factor: float = 1.0
 
 
-@dataclass
-class DayOfUpdate:
-    """当日モードの1回分の実行結果。"""
-
-    exp_id: str
-    route_delay_minutes: int = 0
-    route_message: str | None = None
-    # 運行情報を実データで見られたか。False なら「乱れなし」とは言えない
-    route_checked: bool = True
-    dressing_alert: str | None = None
-    proposals: list[str] = None  # proposal_id の配列
-    notified: int = 0
-
-    def __post_init__(self) -> None:
-        if self.proposals is None:
-            self.proposals = []
+def _at(day: datetime, hhmm: str, field: str) -> datetime:
+    try:
+        hour, minute = (int(x) for x in hhmm.split(":"))
+        return day.replace(hour=hour, minute=minute)
+    except ValueError as exc:
+        raise PlanError("時刻は HH:MM の形で入れてください。", field, "bad_time") from exc
 
 
 class Orchestrator:
@@ -74,68 +75,54 @@ class Orchestrator:
         *,
         makeup: MakeupAgent,
         route: RouteAgent,
-        dressing: DressingAgent,
-        awase: AwaseAgent,
         i18n: I18nAgent,
         repository: RepositoryPort,
-        notifier: NotifierPort,
     ) -> None:
         self.makeup = makeup
         self.route = route
-        self.dressing = dressing
-        self.awase = awase
         self.i18n = i18n
         self.repository = repository
-        self.notifier = notifier
 
     # -- 計画フェーズ -----------------------------------------------------
     async def plan(self, req: PlanRequest) -> tuple[Expedition, dict]:
         """遠征プランを一括で組む。戻り値は (Expedition, 補足情報)。"""
-        event_master = get_event(req.event_id)
-        if event_master is None:
-            raise KeyError(f"unknown event: {req.event_id}")
-
         layer = await self.repository.get_layer(req.layer_id)
         if layer is None:
             raise KeyError(f"unknown layer: {req.layer_id}")
 
         day = event_day(req.day)  # 開場・閉場は JST 基準で組み立てる
-        starts_at = day.replace(hour=event_master.opens_at_hour)
-        ends_at = day.replace(hour=event_master.closes_at_hour)
+        starts_at = _at(day, req.starts_time, "starts_time")
+        ends_at = _at(day, req.ends_time, "ends_time")
+        if ends_at <= starts_at:
+            raise PlanError("終了は開始より後の時刻にしてください。", "ends_time", "ends_before_starts")
         event_ref = EventRef(
-            event_id=event_master.event_id,
-            name=event_master.name,
-            venue=event_master.venue,
+            event_id=req.event_id or CUSTOM_EVENT_ID,
+            name=req.event_name,
+            # 収載イベントなら会場名、それ以外は目的地の駅名で呼ぶ
+            venue=master.venue if (master := get_event(req.event_id or "")) else req.destination_station,
+            station=req.destination_station,
             starts_at=starts_at,
             ends_at=ends_at,
         )
 
-        # 1. 更衣室の混雑予測 → 入場・撤収の推奨
-        dressing_plan = await self.dressing.plan(
-            event_master,
-            day,
-            attendance_factor=req.attendance_factor,
-        )
-        arrive_by = (dressing_plan.recommended_entry or starts_at) - timedelta(
-            minutes=VENUE_BUFFER_MINUTES
-        )
-        leave_at = dressing_plan.recommended_exit or ends_at
-
-        # 2. 大荷物制約の動線（行き・帰り）
+        # 1. 大荷物制約の動線。開場に着くように行き、閉場で帰る
+        #    （更衣室の混雑予測は取り下げた。実データの裏付けが無い推奨時刻で動線を決めない）
         outbound = await self.route.plan_outbound(
             from_station=req.origin_station,
-            to_station=event_master.station,
-            arrive_by=arrive_by,
+            to_station=req.destination_station,
+            arrive_by=starts_at,
             mode=req.luggage_mode,
+            lang=req.lang,
         )
         inbound = await self.route.plan_return(
-            from_station=event_master.station,
+            from_station=req.destination_station,
             to_station=req.origin_station,
-            depart_at=leave_at,
+            depart_at=ends_at,
             mode=req.luggage_mode,
+            lang=req.lang,
         )
 
-        # 3. メイク工程（キャラの色味・造形から、母語で出力）
+        # 2. メイク工程（キャラの色味・造形から、母語で出力）
         makeup_plan = await self.makeup.build(req.character, lang=req.lang)
 
         exp = Expedition(
@@ -144,84 +131,23 @@ class Orchestrator:
             status=ExpeditionStatus.PLANNED,
             lang=req.lang,
             event=event_ref,
-            event_date=event_ref.date_key,  # 当日バッチの絞り込みキー
+            event_date=event_ref.date_key,
             character=req.character,
             luggage_mode=req.luggage_mode,
             origin_station=req.origin_station,
             makeup=makeup_plan,
             routes={"outbound": outbound, "return": inbound},
-            dressing=dressing_plan,
         )
         await self.repository.save_expedition(exp)
 
         extras = {
-            "cultural_note": await self.i18n.cultural_note(event_master.name, req.lang),
+            "cultural_note": await self.i18n.cultural_note(req.event_name, req.lang),
             "ui": self.i18n.ui_strings(req.lang),
             "makeup_coverage": self.makeup.coverage(makeup_plan),
             "leave_home_at": outbound.depart_at.isoformat() if outbound.depart_at else None,
             "wake_up_hint": _wake_up_hint(outbound.depart_at, makeup_plan.total_minutes),
         }
         return exp, extras
-
-    # -- 当日モード -------------------------------------------------------
-    async def run_day_of(self, exp_id: str, *, now: datetime | None = None) -> DayOfUpdate:
-        """当日モードを1回進める。利用者が当日ページから起動する。
-
-        1. 経路の運行実況を見て再計算し、遅延があれば本人に通知
-        2. 撤収アラートの時刻に達していれば通知
-        3. 合わせに紐づくなら到着監視とリスケ起案（確定はしない）
-        """
-        exp = await self.repository.get_expedition(exp_id)
-        if exp is None:
-            raise KeyError(f"unknown expedition: {exp_id}")
-        now = now or datetime.now(exp.event.starts_at.tzinfo)
-
-        update = DayOfUpdate(exp_id=exp_id)
-        exp.status = ExpeditionStatus.DAY_OF
-
-        # 1. 動線の再計算
-        outbound = exp.routes.get("outbound")
-        if outbound:
-            updated_route, delay, message = await self.route.recheck(outbound)
-            exp.routes["outbound"] = updated_route
-            update.route_delay_minutes = delay
-            update.route_message = message
-            update.route_checked = self.route.transit.supports_disruptions
-            if message:
-                await self.notifier.push(
-                    layer_id=exp.layer_id,
-                    message=message,
-                    kind=NotificationKind.ROUTE_DELAY,
-                    lang=exp.lang,
-                    exp_id=exp.exp_id,
-                )
-                update.notified += 1
-
-        # 2. 撤収アラート
-        if exp.dressing and exp.dressing.teardown_alert_at:
-            if now >= exp.dressing.teardown_alert_at:
-                alert = self.dressing.teardown_alert(exp.dressing)
-                if alert:
-                    update.dressing_alert = alert
-                    await self.notifier.push(
-                        layer_id=exp.layer_id,
-                        message=alert,
-                        kind=NotificationKind.TEARDOWN,
-                        lang=exp.lang,
-                        exp_id=exp.exp_id,
-                    )
-                    update.notified += 1
-
-        await self.repository.save_expedition(exp)
-
-        # 3. 合わせの到着監視
-        if exp.awase_id:
-            awase = await self.repository.get_awase(exp.awase_id)
-            if awase:
-                proposals = await self.awase.monitor(awase, now=now)
-                update.proposals = [p.proposal_id for p in proposals]
-
-        return update
 
 
 def _wake_up_hint(depart_at: datetime | None, makeup_minutes: int) -> str | None:

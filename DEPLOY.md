@@ -15,9 +15,9 @@ PWA も API も同じ1サービスから配信する。フロント用のホス�
 | Cloud Run | API＋エージェント＋PWA（コンテナ1つ） |
 | Artifact Registry | コンテナイメージの置き場 |
 | Cloud Build | ソースからのイメージビルド |
-| Firestore（Native） | レイヤー・遠征・合わせ・お知らせ・チャット・監査ログ |
+| Firestore（Native） | レイヤー・遠征・相談の条件・監査ログ |
 | Secret Manager | 外部APIキー |
-| Firebase Authentication | ログイン |
+| Firebase Authentication | ログイン（メール/パスワードと、ゲスト用の匿名ログインを有効にする） |
 | Cloud Logging | 監査ログ（Cloud Run から自動で流れる） |
 
 以下、プロジェクトIDは `cos-meguri`、リージョンは東京（`asia-northeast1`）を前提に書く。
@@ -62,6 +62,10 @@ gcloud firestore databases create --location=asia-northeast1
 > **Cloud Run には `FIRESTORE_EMULATOR_HOST` を設定しないこと。** 設定されていると
 > クライアントが実 Firestore ではなくエミュレータを見にいき、書き込みが行方不明になる。
 > ローカルの compose だけがこの変数を渡している。
+>
+> **`FIREBASE_AUTH_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_URL` も同じく設定しないこと。**
+> こちらはもっと危ない。firebase-admin が**署名の無いトークンを受け入れる**ようになり、
+> 誰でも好きな利用者になりすませる。`APP_ENV` が local/test 以外でこの変数があると、起動時に例外で止まる。
 
 ## 2. 実行用サービスアカウント
 
@@ -130,8 +134,8 @@ gcloud run deploy cos-meguri \
 - `--allow-unauthenticated` は **PWA を一般公開するため**。API の認証はアプリ側（Firebase の
   ID トークン検証）が担う
 - `PORT` は Cloud Run が渡す。Dockerfile の `CMD` がそれを読むので指定不要
-- **`AUTH_MODE=firebase` は必須**。`APP_ENV=production` で `AUTH_MODE=dev` を指定すると、
-  パスワード検証なしのログインが本番に出ないよう、起動時に例外で止まる
+- **`AUTH_MODE=firebase` は必須**（既定値でもある）。`AUTH_MODE=dev`（パスワードを確かめないテスト用ログイン）は
+  `APP_ENV=test` 以外では起動時に例外で止まる。Firebase の設定が足りないときも、黙って別のログインに落ちずに止まる
 - キーが未設定のプロバイダは `live` 指定でも自動的に mock に落ちる。まず全部 mock で出して、
   キーが揃ったものから `live` に切り替えるのが安全
 - `REPOSITORY=firestore` は既定値だが、取り違えを防ぐため明示している。`memory` にすると
@@ -143,15 +147,16 @@ gcloud run deploy cos-meguri \
 curl -s https://SERVICE_URL/healthz
 ```
 
-`providers` が期待どおりか見る。`auth` が `auth:dev` になっていたら、`AUTH_MODE` か
-Firebase の設定が入っていない（起動時のログに警告が出ているはず）。
+`providers` が期待どおりか見る。`auth` は **`auth:firebase` ちょうど**であること。
+`auth:firebase-emulator` になっていたらエミュレータの変数が紛れ込んでいる（本来は起動時に止まる）。
 
 ```json
-{"status":"ok","env":"production","providers":{"ekispert":"ekispert:live","gemini":"gemini:live","notifier":"notifier:in_app","repository":"repository:firestore","auth":"auth:firebase"}}
+{"status":"ok","env":"production","providers":{"ekispert":"ekispert:live","gemini":"gemini:live","repository":"repository:firestore","auth":"auth:firebase"}}
 ```
 
-ブラウザで `https://SERVICE_URL/login` を開き、メールアドレス入力の欄が出ていれば
-Firebase 経路に乗っている（開発用ログインなら「はじめる」ボタンだけの画面が出る）。
+ブラウザで `https://SERVICE_URL/ask` を開き、ログインせずに（ゲストとして）相談の画面が出ることを確かめる。
+続けて `https://SERVICE_URL/signup` でアカウントを作ってログインできることを確かめる。
+`/api/auth/config` の `emulator` が `false` であることも見る（`true` ならエミュレータに繋がっている）。
 
 ---
 
@@ -339,12 +344,12 @@ curl -s https://SERVICE_URL/healthz | python3 -m json.tool
 
 | warnings に出るもの | 意味 | 対処 |
 |---|---|---|
-| 開発用ログイン（パスワード検証なし）… | `AUTH_MODE=firebase` が効いていない | Firebase の設定を入れ直す |
+| ログインは Firebase Authentication のエミュレータです… | エミュレータの変数が本番に紛れている | `FIREBASE_AUTH_EMULATOR_HOST` を外す |
 | `xxx: live 指定ですがキーが無いため mock…` | シークレットの参照漏れ | `--update-secrets` の綴りを確認 |
 
 あわせて次を確認する。
 
-1. ブラウザでログインし、遠征を1件作って `/api/me/notifications` が引けること
+1. ブラウザでログインし、「相談」で条件をそろえて「プラン」に移れること
 2. `providers.repository` が `repository:firestore` になっていること
    （`repository:memory` だとインスタンス再起動でデータが消える）
 
@@ -383,10 +388,11 @@ gcloud run services update-traffic cos-meguri --to-revisions=REVISION_NAME=100
 
 | 症状 | 見るところ |
 |---|---|
-| 起動しない | Cloud Run の「ログ」。`AUTH_MODE=dev` を本番で指定すると意図的に例外で止まる |
+| 起動しない | Cloud Run の「ログ」。`AUTH_MODE=dev`・エミュレータの変数・Firebase の設定漏れは意図的に例外で止まる |
 | `providers` が全部 mock | 環境変数の綴りとシークレットの参照。キーが無いと live 指定でも mock に落ちる |
 | ログインできない | Firebase コンソールで「メール/パスワード」が有効か、`FIREBASE_WEB_API_KEY` が正しいか |
-| 401 が返る | ID トークンの期限切れ。PWA は自動でログアウトして再ログインを促す |
+| 「使ってみる」でログインの画面に飛ばされる | Firebase コンソールの Authentication →「ログイン方法」で**「匿名」が有効**か。無効だとゲストの通行証が取れない |
+| 401 が返る | ID トークンの期限切れ。PWA は更新用トークンで1回だけ更新して投げ直す。それでも通らなければ、ゲストは新しいゲストで開き直し、ログインした人はログインの画面へ |
 | Firestore の書き込みが失敗 | 実行サービスアカウントに `roles/datastore.user` が付いているか |
 | 書き込んだデータが見つからない | `FIRESTORE_EMULATOR_HOST` が設定されていないか確認（本番では未設定が正しい） |
 | 再起動でデータが消える | `providers.repository` が `repository:memory` になっている |

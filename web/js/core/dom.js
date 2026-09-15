@@ -23,6 +23,67 @@ export function msg(el, text, kind = "") {
   if (el) el.innerHTML = `<div class="msg ${kind}">${esc(text)}</div>`;
 }
 
+// ---- フォームの結果の出しかた ----
+//
+// 出す場所は2つだけに決めてある。画面ごとに違う場所に出すと、押したあとに毎回探させる。
+//   - 欄の不足や形の誤り → その欄の真下（fieldError）。欄の枠も赤くする
+//   - それ以外（サーバの返事・通信の失敗・できあがりの知らせ）→ フォームの頭の1か所（formAlert）
+// どちらも見えるところまで送り、欄の誤りならその欄にカーソルを置く。
+
+/** フォームの頭に結果を1つだけ出す。HTML 側に `<div class="form-alert" hidden>` を置いておく。 */
+export function formAlert(el, text, kind = "error", { html = false } = {}) {
+  if (!el) return;
+  el.innerHTML = `<div class="msg ${kind}">${html ? text : esc(text)}</div>`;
+  el.hidden = false;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+export function clearFormAlert(el) {
+  if (!el) return;
+  el.innerHTML = "";
+  el.hidden = true;
+}
+
+/** 欄の真下に、その欄の誤りを出す。 */
+export function fieldError(input, text) {
+  const label = input?.closest("label");
+  if (!label) return;
+  input.setAttribute("aria-invalid", "true");
+  let note = label.querySelector(".field-error");
+  if (!note) {
+    note = document.createElement("p");
+    note.className = "field-error";
+    note.id = `${input.id}-error`;
+    input.setAttribute("aria-describedby", note.id);
+    label.append(note);
+  }
+  note.textContent = text;
+}
+
+/** 欄の誤りをまとめて消す。打ち直したら消えるように、入力のたびにも呼ぶ。 */
+export function clearFieldErrors(root) {
+  root.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+  root.querySelectorAll(".field-error").forEach((el) => el.remove());
+}
+
+/** 最初の誤りの欄へ送ってカーソルを置く。 */
+export function focusFirstError(root) {
+  const first = root.querySelector("[aria-invalid]");
+  if (!first) return;
+  first.scrollIntoView({ block: "center", behavior: "smooth" });
+  first.focus({ preventScroll: true });
+}
+
+/** 欄を触ったら、その欄の誤りだけ消す。 */
+export function clearErrorOnInput(root) {
+  root.addEventListener("input", (e) => {
+    const label = e.target.closest?.("label");
+    if (!label) return;
+    e.target.removeAttribute("aria-invalid");
+    label.querySelector(".field-error")?.remove();
+  });
+}
+
 /** まだ材料が揃っていない画面。何をすれば進むかを必ず書く。
  *
  * 書く場所は「相談」のページ1箇所に集めた。ここには行き先だけを置く

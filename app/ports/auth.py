@@ -2,8 +2,7 @@
 
 ログイン画面は自前で作るが、資格情報の保管とトークン発行は認証基盤に任せる
 （既定は Firebase Authentication）。この層が返すのは不透明な uid だけで、
-メールアドレスなどの個人情報は上位に渡さない。設計書 §7-1 の「素顔とコス名を
-紐づけない」を、認証まわりでも崩さないための境界。
+メールアドレスなどの個人情報は上位に渡さない（設計書 §7-1）。
 """
 
 from __future__ import annotations
@@ -18,8 +17,8 @@ class AuthIdentity(BaseModel):
 
     uid: str
     provider: str
-    # 初回ログイン時のコス名の候補。無ければアプリ側で入力させる
-    suggested_handle: str | None = None
+    # ゲスト（Firebase の匿名ログイン）。相談とプランは使えるが、お気に入りは使えない
+    anonymous: bool = False
 
 
 class AuthError(Exception):
@@ -37,6 +36,5 @@ class AuthPort(ABC):
     def client_config(self) -> dict:
         """フロントがログイン画面を組むのに要る公開情報。
 
-        Firebase なら web API キーなど（公開前提の値のみ）。開発用実装なら
-        「パスワード無しの開発ログインが有効」であることを返す。
+        Firebase なら web API キーとログインの REST の URL（公開前提の値のみ）。
         """

@@ -30,16 +30,3 @@ class LlmPort(ABC):
     @abstractmethod
     async def cultural_note(self, event_name: str, *, lang: str, fallback: str) -> str:
         """更衣室ルール・イベント慣習の文化的補足を母語で生成する。"""
-
-    @abstractmethod
-    async def explain(self, prompt: str, *, fallback: str) -> str:
-        """混雑・動線の判断理由を短い文で説明する。"""
-
-    @abstractmethod
-    async def extract_slots(self, text: str, *, known_events: list[dict]) -> dict:
-        """チャットの自由文から遠征の条件を抜き出す。
-
-        返すのは {event_id, day(ISO8601), title, character, origin_station,
-        luggage_mode} のうち読み取れたものだけ。読み取れない項目は含めない。
-        LLM が使えない場合もキーワード一致で最低限は埋まること。
-        """

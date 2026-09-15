@@ -1,275 +1,60 @@
-"""チャットエージェント。自由文の相談から遠征プランまでを1本の会話で運ぶ。
+"""相談の条件を持ち、そろったらプランを組ませる。
 
-やっていることは素朴なスロットフィリング:
-1. 発話から条件（イベント・日付・作品/キャラ・出発駅・荷物）を抜き出す
-2. 足りない項目を1つずつ聞き返す
-3. 揃ったら Orchestrator に渡してプランを組み、結果を要約して返す
-
-Gemini があれば抽出精度が上がるだけで、無くてもキーワード抽出で最後まで進む。
-LLM に「次に何を聞くか」を委ねないのは、聞き漏らしと堂々巡りを避けるため。
+「相談」ページの欄（イベント名・日付・目的地・開始・終了・作品名・キャラ名・出発駅・荷物）が
+そのまま ChatSlots になる。自由文を読み取る入口は取り下げた。欄を埋めれば
+読み違いが起きないので、聞き返しの会話を持つ理由がなくなった。
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from app.agents.orchestrator import Orchestrator, PlanRequest
-from app.domain.events import get_event, list_events
-from app.domain.models import (
-    CharacterRef,
-    ChatMessage,
-    ChatRole,
-    ChatSession,
-    ChatSlots,
-    JST,
-    Lang,
-    Layer,
-    LuggageMode,
-    jst_hm,
-)
-from app.ports.llm import LlmPort
+from app.agents.orchestrator import Orchestrator, PlanError, PlanRequest
+from app.domain.models import CharacterRef, ChatSession, ChatSlots, Layer, LuggageMode
 from app.ports.repository import RepositoryPort
-
-# 足りない項目を聞き返す文面
-_PROMPTS: dict[str, dict[str, str]] = {
-    "event_id": {
-        "ja": "どのイベントですか？（コミケ / acosta / 世界コスプレサミット / ホココス）",
-        "en": "Which event? (Comic Market / acosta! / World Cosplay Summit / Hokokos)",
-    },
-    "day": {
-        "ja": "開催日はいつですか？（例: 9/6、2026-09-06）",
-        "en": "Which date? (e.g. 9/6 or 2026-09-06)",
-    },
-    "title": {
-        "ja": "作品名を教えてください。メイク工程の生成にだけ使い、共有文には残しません。",
-        "en": "Which series? It is used only to build your makeup steps, never in shared text.",
-    },
-    "character": {
-        "ja": "キャラクター名を教えてください。",
-        "en": "Which character?",
-    },
-    "origin_station": {
-        "ja": "出発駅はどこですか？（例: 横浜駅から）",
-        "en": "Which station are you leaving from?",
-    },
-    "luggage_mode": {
-        "ja": "荷物はどのくらいですか？（手荷物のみ / キャリー1個 / キャリー＋ウィッグ＋大道具）",
-        "en": "How much luggage? (hand luggage only / one suitcase / suitcase + wig + props)",
-    },
-}
-
-_GREETING = {
-    "ja": "遠征の予定を教えてください。イベント・日付・作品名・キャラ名・出発駅・荷物の6つが揃えば、一日ぶんを組み立てます。",
-    "en": "Tell me about your trip. With the event, date, series, character, origin station and luggage — six in all — I'll build your whole day.",
-}
 
 
 class ChatAgent:
-    def __init__(
-        self,
-        orchestrator: Orchestrator,
-        llm: LlmPort,
-        repository: RepositoryPort,
-    ) -> None:
+    def __init__(self, orchestrator: Orchestrator, repository: RepositoryPort) -> None:
         self.orchestrator = orchestrator
-        self.llm = llm
         self.repository = repository
 
     async def history(self, layer: Layer) -> ChatSession:
         session = await self.repository.get_chat(layer.layer_id)
         if session is None:
             session = ChatSession(layer_id=layer.layer_id, lang=layer.lang)
-            session.messages.append(
-                ChatMessage(role=ChatRole.AGENT, text=_text(_GREETING, layer.lang))
-            )
             # 既定値として、プロフィールの荷物設定を先に埋めておく
             session.slots.luggage_mode = layer.prefs.luggage_mode
             await self.repository.save_chat(session)
         return session
 
-    async def send(self, layer: Layer, text: str) -> ChatSession:
-        """1往復進める。プランが組めた場合は session.exp_id が埋まる。"""
-        session = await self.history(layer)
-        session.lang = layer.lang
-        session.messages.append(ChatMessage(role=ChatRole.USER, text=text))
-
-        extracted = await self.llm.extract_slots(text, known_events=_event_catalog())
-        session.slots = _merge(session.slots, extracted)
-
-        if session.slots.is_complete:
-            reply = await self._build_plan(layer, session)
-        else:
-            reply = self._ask_next(session)
-
-        session.messages.append(ChatMessage(role=ChatRole.AGENT, text=reply))
-        return await self.repository.save_chat(session)
-
     async def set_slots(self, layer: Layer, values: dict) -> ChatSession:
-        """条件を直接書き換える（画面の入力欄から）。
-
-        自由文の言い換えを経由しないので、利用者が直したとおりに入る。
-        揃えばそのままプランを組む。空文字は「消す」として扱う。
-        """
+        """条件を書き換える。揃えばそのままプランを組む。空文字は「消す」として扱う。"""
         session = await self.history(layer)
         session.lang = layer.lang
         for name, value in values.items():
             if name in ChatSlots.model_fields:
                 setattr(session.slots, name, value or None)
+        # 保存する前に確かめる。組めない時刻を残すと、次に開いたときも同じ誤りで止まる
+        slots = session.slots
+        if slots.starts_time and slots.ends_time and slots.ends_time <= slots.starts_time:
+            raise PlanError("終了は開始より後の時刻にしてください。", "ends_time", "ends_before_starts")
 
-        reply = (
-            await self._build_plan(layer, session)
-            if session.slots.is_complete
-            else self._ask_next(session)
-        )
-        session.messages.append(ChatMessage(role=ChatRole.AGENT, text=reply))
+        if session.slots.is_complete:
+            session.exp_id = await self._build_plan(layer, session.slots)
         return await self.repository.save_chat(session)
 
-    def _ask_next(self, session: ChatSession) -> str:
-        missing = session.slots.missing()
-        filled = _filled_summary(session.slots, session.lang)
-        question = _text(_PROMPTS[missing[0]], session.lang)
-        if not filled:
-            return question
-        remaining = len(missing) - 1
-        tail = (
-            f"（残り{remaining}項目）" if session.lang is Lang.JA else f" ({remaining} more to go)"
-        )
-        return f"{filled}\n{question}{tail if remaining else ''}"
-
-    async def _build_plan(self, layer: Layer, session: ChatSession) -> str:
-        slots = session.slots
+    async def _build_plan(self, layer: Layer, slots: ChatSlots) -> str:
         req = PlanRequest(
             layer_id=layer.layer_id,
+            event_name=slots.event_name,
             event_id=slots.event_id,
+            destination_station=slots.destination_station,
+            starts_time=slots.starts_time,
+            ends_time=slots.ends_time,
             day=slots.day,
             character=CharacterRef(title=slots.title, name=slots.character),
             origin_station=slots.origin_station,
             luggage_mode=slots.luggage_mode or LuggageMode.CARRY,
             lang=layer.lang,
         )
-        exp, extras = await self.orchestrator.plan(req)
-        session.exp_id = exp.exp_id
-
-        route = exp.routes.get("outbound")
-        dressing = exp.dressing
-        if layer.lang is Lang.JA:
-            lines = [
-                f"{exp.event.name}（{exp.event.venue}）の一日を組みました。",
-                f"・メイク {exp.makeup.total_minutes}分／{len(exp.makeup.steps)}工程"
-                f"（キャラの色味と造形に合わせています）",
-            ]
-            if route and route.depart_at:
-                lines.append(
-                    f"・出発 {jst_hm(route.depart_at)}／体感 {route.effective_minutes}分"
-                    f"（荷物ぶん +{route.penalty_minutes}分）"
-                )
-            if dressing and dressing.recommended_entry:
-                lines.append(
-                    f"・更衣室は {jst_hm(dressing.recommended_entry)} 入場、"
-                    f"{jst_hm(dressing.recommended_exit)} に出るのがおすすめ（予測です）"
-                )
-            if extras.get("wake_up_hint"):
-                lines.append(f"・{extras['wake_up_hint']}")
-            lines.append("工程と動線は「プラン」のページにまとめました。")
-            return "\n".join(lines)
-
-        lines = [
-            f"Your day at {exp.event.name} ({exp.event.venue}) is ready.",
-            f"- Makeup: {exp.makeup.total_minutes} min over {len(exp.makeup.steps)} steps "
-            f"(matched to the character's colours and shapes)",
-        ]
-        if route and route.depart_at:
-            lines.append(
-                f"- Leave at {jst_hm(route.depart_at)}; {route.effective_minutes} min door-to-door "
-                f"(+{route.penalty_minutes} min for luggage)"
-            )
-        if dressing and dressing.recommended_entry:
-            lines.append(
-                f"- Changing room: enter around {jst_hm(dressing.recommended_entry)}, "
-                f"leave by {jst_hm(dressing.recommended_exit)} (estimated)"
-            )
-        if extras.get("wake_up_hint"):
-            lines.append(f"- {extras['wake_up_hint']}")
-        lines.append("The steps and the route are on the Plan page.")
-        return "\n".join(lines)
-
-    async def reset(self, layer: Layer) -> ChatSession:
-        """会話をやり直す。プランそのものは消さない。"""
-        session = ChatSession(layer_id=layer.layer_id, lang=layer.lang)
-        session.messages.append(
-            ChatMessage(role=ChatRole.AGENT, text=_text(_GREETING, layer.lang))
-        )
-        session.slots.luggage_mode = layer.prefs.luggage_mode
-        return await self.repository.save_chat(session)
-
-
-# ---------------------------------------------------------------- 補助
-
-
-def _event_catalog() -> list[dict]:
-    return [
-        {"event_id": e.event_id, "name": e.name, "name_en": e.name_en}
-        for e in list_events()
-    ]
-
-
-def _text(table: dict[str, str], lang: Lang) -> str:
-    return table.get(lang.value) or table["en"]
-
-
-def _merge(slots: ChatSlots, extracted: dict) -> ChatSlots:
-    """抽出結果を反映する。既に埋まっている項目も、新しい発話があれば上書きする。"""
-    updated = slots.model_copy(deep=True)
-
-    if event_id := extracted.get("event_id"):
-        if get_event(str(event_id)):
-            updated.event_id = str(event_id)
-
-    if raw_day := extracted.get("day"):
-        parsed = _parse_iso(str(raw_day))
-        if parsed:
-            updated.day = parsed
-
-    for field in ("title", "character", "origin_station"):
-        value = extracted.get(field)
-        if isinstance(value, str) and value.strip():
-            setattr(updated, field, value.strip())
-
-    if raw_mode := extracted.get("luggage_mode"):
-        try:
-            updated.luggage_mode = LuggageMode(str(raw_mode))
-        except ValueError:
-            pass
-
-    return updated
-
-
-def _parse_iso(value: str) -> datetime | None:
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=JST)
-
-
-def _filled_summary(slots: ChatSlots, lang: Lang) -> str:
-    """いま把握できている条件を短く返す。聞き返しの前に置いて、行き違いを防ぐ。"""
-    parts: list[str] = []
-    if slots.event_id and (event := get_event(slots.event_id)):
-        parts.append(event.name if lang is Lang.JA else event.name_en)
-    if slots.day:
-        parts.append(f"{slots.day.astimezone(JST):%m/%d}")
-    if slots.title and slots.character:
-        parts.append(f"{slots.title} / {slots.character}")
-    if slots.origin_station:
-        parts.append(
-            f"{slots.origin_station}発" if lang is Lang.JA else f"from {slots.origin_station}"
-        )
-    if slots.luggage_mode:
-        parts.append(
-            slots.luggage_mode.label if lang is Lang.JA else slots.luggage_mode.value
-        )
-    if not parts:
-        return ""
-    joined = " / ".join(parts)
-    return f"承知しました（{joined}）。" if lang is Lang.JA else f"Got it ({joined})."
+        exp, _extras = await self.orchestrator.plan(req)
+        return exp.exp_id

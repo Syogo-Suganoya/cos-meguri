@@ -10,9 +10,9 @@
   `notifications/initialized` が要り、以降は `Mcp-Session-Id` を付け回す
 - 応答は JSON のことも SSE（`text/event-stream`）のこともある
 
-**この MCP に無いもの**:
-- 運行情報（遅延）: Tool が無い。REST の
-  `/operationLine/service/rescuenow/information` を直接叩いて補う（`disruptions`）
+**使っていないもの**:
+- 運行情報（遅延）: MCP に Tool が無い。遅延の通知ごとアプリから外したので、
+  REST も叩かない
 - 駅設備（エレベータ・階段・コインロッカー）: **API 自体に無い**ので、
   アプリからも扱わない（捏造して大荷物の利用者を危険側に倒さない）
 """
@@ -27,7 +27,7 @@ from typing import Any
 import httpx
 
 from app.adapters.mock_transit import MockTransit
-from app.domain.models import RouteSegment, ServiceDisruption
+from app.domain.models import RouteSegment
 from app.ports.transit import TransitPort
 
 logger = logging.getLogger(__name__)
@@ -35,26 +35,10 @@ logger = logging.getLogger(__name__)
 MCP_URL = "https://api-mcp.ekispert.jp/mcp"
 PROTOCOL_VERSION = "2025-06-18"
 
-# 運行情報だけは MCP に Tool が無いので REST を直接叩く
-REST_DISRUPTIONS = "https://api.ekispert.jp/v1/json/operationLine/service/rescuenow/information"
-
-# 平常運転を表す status。これ以外は「何かある」として扱う
-_NORMAL_STATUSES = {"平常運転", "normal", ""}
-
-# status から見込み遅延を置く。実数は API から返らないので保守側に丸める
-_DELAY_BY_STATUS = (
-    ("運転見合わせ", 40),
-    ("運転中止", 40),
-    ("運休", 30),
-    ("直通運転中止", 20),
-    ("列車遅延", 15),
-    ("遅延", 15),
-)
-_DEFAULT_DELAY_MINUTES = 10
-
 # ドキュメント「利用可能な機能一覧」の Tool 名
 TOOL_SEARCH_ROUTES = "ekispert_api_search_routes"
 TOOL_GENERATE_CONDITION = "ekispert_api_generate_condition"
+TOOL_GET_STATIONS = "ekispert_api_get_stations"
 
 
 class EkispertTransit(TransitPort):
@@ -66,6 +50,7 @@ class EkispertTransit(TransitPort):
         self.timeout = timeout
         # 経路が引けなかったときだけ、静的グラフで画面を止めない
         self._fallback = MockTransit()
+        self._station_cache: dict[str, list[str]] = {}
         self._request_id = 0
         self._session_id: str | None = None
         self._condition: str | None = None
@@ -233,70 +218,49 @@ class EkispertTransit(TransitPort):
         if routes:
             return routes[:max_routes]
 
+        # 駅名は自由入力。ローマ字（Yokohama）や読みで書かれると探索は断るが、駅の検索なら引ける。
+        # 候補が1つに絞れる駅だけ正式名に置き換えて探し直す（「大宮」のように割れる駅は勝手に選ばない）
+        resolved = [await self._only_candidate(name) for name in (from_station, to_station)]
+        if any(resolved):
+            from_name, to_name = (r or n for r, n in zip(resolved, (from_station, to_station)))
+            retry = {**args, "viaList": f"{_station(from_name)}:{_station(to_name)}"}
+            routes = await self._search_with_timetable(retry, arrive_by, moment)
+            if routes:
+                return routes[:max_routes]
+
         logger.warning("ekispert: 経路を引けなかったので静的グラフに落とす")
-        return await self._fallback.search(
+        fallback = await self._fallback.search(
             from_station=from_station,
             to_station=to_station,
             arrive_by=arrive_by,
             depart_at=depart_at,
             max_routes=max_routes,
         )
+        # 目安の印を付ける。駅名は自由入力なので、打ち間違いを本物の経路に見せない
+        return [[seg.model_copy(update={"estimated": True}) for seg in route] for route in fallback]
 
-    async def disruptions(self, lines: list[str]) -> list[ServiceDisruption]:
-        """鉄道運行情報。**MCP に Tool が無いので REST を直接叩く。**
+    # ---- 駅名の候補 --------------------------------------------------
 
-        アクセスキーは MCP と同じものを `key` クエリで渡す。全国ぶんが返るので、
-        いま乗る予定の路線名に当たるものだけを拾う。
+    async def _only_candidate(self, name: str) -> str | None:
+        """書かれた駅名と違う正式名が、ただ1つだけ見つかればそれを返す。"""
+        candidates = await self.suggest_stations(name, limit=2)
+        if len(candidates) == 1 and candidates[0] != _station(name):
+            return candidates[0]
+        return None
 
-        レスキューナウの提供は契約に含まれないことがある。取れなかったときは
-        `supports_disruptions` を False に倒し、画面が「乱れなし」と言い切らない
-        ようにする（ホームに立っている人に嘘の安心を与えないため）。
-        """
-        payload = await self._get_json(REST_DISRUPTIONS, {"key": self.api_key})
-        if payload is None:
-            self.supports_disruptions = False
+    async def suggest_stations(self, name: str, *, limit: int = 8) -> list[str]:
+        wanted = _station(name)
+        if not wanted:
             return []
-
-        self.supports_disruptions = True
-        wanted = {_normalize_line(name) for name in lines}
-        out: list[ServiceDisruption] = []
-        for info in _listify((payload.get("ResultSet") or {}).get("Information")):
-            if not isinstance(info, dict):
-                continue
-            line_name = str((info.get("Line") or {}).get("Name") or "")
-            if wanted and _normalize_line(line_name) not in wanted:
-                continue
-            status = str(info.get("status") or "")
-            if not status or status in _NORMAL_STATUSES:
-                continue
-            out.append(
-                ServiceDisruption(
-                    line=line_name,
-                    status=status,
-                    delay_minutes=_delay_minutes(status),
-                    detail=str(info.get("Title") or ""),
-                )
-            )
-        return out
-
-    async def _get_json(self, url: str, params: dict) -> dict | None:
-        """REST を1回叩く。**例外をそのまま出さない**（URL にキーが載る）。"""
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                res = await client.get(url, params=params)
-                res.raise_for_status()
-                return res.json()
-        except httpx.HTTPStatusError as exc:
-            # exc をそのまま出すと URL の ?key= ごとログに残る。状態だけ出す
-            logger.warning(
-                "ekispert rest %s: %s（契約に含まれていない可能性）",
-                url.rsplit("/", 1)[-1],
-                exc.response.status_code,
-            )
-            return None
-        except (httpx.HTTPError, ValueError) as exc:
-            logger.warning("ekispert rest failed: %s", type(exc).__name__)
-            return None
+        if wanted not in self._station_cache:
+            payload = await self._call(TOOL_GET_STATIONS, {"name": wanted, "type": "train"})
+            if payload is None:
+                return []  # 引けなかったことは覚えない（通信の一時的な失敗かもしれない）
+            # 入力のたびに聞くので、同じ名前は覚えておく。際限なく増えないよう古いものから捨てる
+            if len(self._station_cache) >= 256:
+                self._station_cache.pop(next(iter(self._station_cache)))
+            self._station_cache[wanted] = _parse_station_names(payload)
+        return self._station_cache[wanted][:limit]
 
 
 # ---- 応答の読み取り --------------------------------------------------
@@ -319,6 +283,18 @@ def _tool_payload(result: dict) -> dict | None:
             if isinstance(parsed, dict):
                 return parsed
     return None
+
+
+def _parse_station_names(payload: dict | None) -> list[str]:
+    """get_stations の応答から駅名だけを取り出す。「大宮(埼玉県)」のように探索にそのまま渡せる形。"""
+    if not isinstance(payload, dict):
+        return []
+    names: list[str] = []
+    for point in _listify((payload.get("ResultSet") or {}).get("Point")):
+        name = ((point or {}).get("Station") or {}).get("Name") if isinstance(point, dict) else None
+        if isinstance(name, str) and name and name not in names:
+            names.append(name)
+    return names
 
 
 def _listify(value: Any) -> list:
@@ -437,20 +413,3 @@ def _station(name: str) -> str:
     """
     trimmed = name.strip()
     return trimmed[:-1] if len(trimmed) > 1 and trimmed.endswith("駅") else trimmed
-
-
-def _normalize_line(name: str) -> str:
-    """路線名の表記ゆれを均す。「ＪＲ京浜東北線」と「JR京浜東北線」を同じに扱う。"""
-    wide = "".join(
-        chr(ord(ch) - 0xFEE0) if "Ａ" <= ch <= "Ｚ" or "ａ" <= ch <= "ｚ" else ch
-        for ch in name
-    )
-    return wide.replace(" ", "").replace("　", "").upper()
-
-
-def _delay_minutes(status: str) -> int:
-    """status の文言から見込み遅延を置く。実数は API から返らない。"""
-    for keyword, minutes in _DELAY_BY_STATUS:
-        if keyword in status:
-            return minutes
-    return _DEFAULT_DELAY_MINUTES

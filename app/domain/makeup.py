@@ -229,6 +229,22 @@ _BUILDERS = {
     MakeupArea.WIG_LINE: _wig_line,
 }
 
+# 工程の根拠のタグ。下書きは日本語で積み、英語の工程表ではここで置き換える
+_REASON_EN = {
+    "明度は変えない": "Lightness unchanged",
+    "屋内外の撮影を想定": "Indoor and outdoor shoots",
+    "キャラの眉山に合わせる": "Match the character's brow arch",
+    "濃さより置き場所": "Placement over depth",
+    "鼻の影は上1/3に限定": "Nose shade on the upper third only",
+    "光は量より置き場所": "Light: placement over amount",
+    "淡色の発色を確保": "Keep pale colours vivid",
+    "キャラの目の形に合わせる": "Match the character's eye shape",
+    "撮影での見え方": "How it reads on camera",
+    "発色しないときはベース入りを選ぶ": "Use a tinted base if colour won't show",
+    "淡色リップの発色": "Pale lip colour payoff",
+    "生え際の色は肌基準": "Hairline colour follows your skin",
+}
+
 _NOTES = {
     Lang.JA: [
         "工程はキャラの色味と造形から組んでいます。肌の色や顔立ちは見ていないので、濃さはご自身に合わせて決めてください。",
@@ -254,7 +270,9 @@ def build_plan(character: CharacterRef, *, lang: Lang = Lang.JA) -> MakeupPlan:
                 instruction=instruction.strip(),
                 lang=lang,
                 minutes=draft.minutes,
-                personalized_for=draft.reasons,
+                personalized_for=(
+                    draft.reasons if lang is Lang.JA else [_REASON_EN.get(r, r) for r in draft.reasons]
+                ),
             )
         )
     return MakeupPlan(

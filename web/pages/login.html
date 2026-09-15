@@ -3,46 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>入る — コスめぐり</title>
+<title data-i18n="ログイン — コスめぐり">ログイン — コスめぐり</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=53">
+<!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
+     スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
+<script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
+<link rel="stylesheet" href="/static/style.css?v=76">
 </head>
 <body class="p-login">
+<!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
+<header class="top"></header>
 
 <main>
-  <h1 class="page-title">入る</h1>
-  <p class="page-lead">コスめぐりはコス名だけで成立します。本名も素顔も預かりません。</p>
+  <h1 class="page-title" data-i18n="ログイン">ログイン</h1>
 
-  <div id="login-error" class="out"></div>
+  <section class="card login-card">
+    <h2 data-i18n="メールでログイン">メールでログイン</h2>
+    <!-- サーバの返事と通信の失敗はここ1か所。欄の誤りは欄の真下に出る（dom.js） -->
+    <div id="form-alert" class="form-alert" role="alert" hidden></div>
+    <form id="login-form" class="login-form" novalidate>
+      <label><span data-i18n="メールアドレス">メールアドレス</span><input id="fb-email" type="email" autocomplete="username" required></label>
+      <label><span data-i18n="パスワード">パスワード</span><input id="fb-password" type="password" autocomplete="current-password" required></label>
+      <div class="actions">
+        <button id="btn-submit" type="submit" class="primary" data-i18n="ログイン">ログイン</button>
+      </div>
+    </form>
 
-  <!-- 開発用ログイン。コス名は端末ごとに自動でつけるので、押すだけ -->
-  <section class="card login-card" id="view-dev">
-    <h2>はじめる</h2>
-    <p class="note">コス名はこの端末用に自動でつけます。あとから <b>準備</b> のページで好きな名前に変えられます。</p>
-    <div class="actions">
-      <button id="btn-dev-login" class="primary">はじめる</button>
-    </div>
-  </section>
-
-  <!-- メールとパスワードで入る場合だけ出す（本番） -->
-  <section class="card login-card hidden" id="view-firebase">
-    <h2>メールで入る</h2>
-    <p class="note">メールアドレスは Firebase Authentication だけが持ちます。コスめぐりのデータには残しません。</p>
-    <div class="grid">
-      <label>メールアドレス<input id="fb-email" type="email" autocomplete="username"></label>
-      <label>パスワード<input id="fb-password" type="password" autocomplete="current-password"></label>
-      <label>コス名<input id="fb-handle" maxlength="40" placeholder="例: ミナト"></label>
-    </div>
-    <div class="actions">
-      <button id="btn-fb-login" class="primary">入る</button>
-      <button id="btn-fb-signup">はじめて使う</button>
-    </div>
+    <p class="login-switch"><span data-i18n="はじめて使う方は">はじめて使う方は</span> <a id="to-signup" href="/signup" data-i18n="アカウントを作る">アカウントを作る</a></p>
   </section>
 </main>
 
-<script type="module" src="/static/js/pages/login.js?v=53"></script>
+<script type="module" src="/static/js/pages/login.js?v=76"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* トップ。何ができるアプリかを伝えるだけの案内ページ。
-   ログインはアプリ側の画面（/login）が持つ。ここには入口のボタンしか置かない。 */
+   「使ってみる」はログインせずに相談へ入る。ログインはお気に入りを使いたい人だけ。 */
 
 import { api } from "./../core/api.js";
 import { mountShell } from "./../core/shell.js";
@@ -8,17 +8,15 @@ import * as store from "./../core/store.js";
 let layer = null;
 if (store.token()) {
   try {
-    layer = await api("/api/auth/session", { method: "POST", body: { handle: null } });
+    layer = await api("/api/auth/session", { method: "POST" });
   } catch {
     store.clearSession();
   }
 }
 
 // トップは案内のページ。左のステップ帯は置かない
-await mountShell({ authed: Boolean(layer), layer, rail: false });
+await mountShell({ layer, rail: false });
 
-// 文言は入っていても変えない。行き先の出し分けは /login がやる
-// （入っている人は login.js が /ask へ送る）
 
 // ---- 飛沫の層をずらして動かす ----
 //

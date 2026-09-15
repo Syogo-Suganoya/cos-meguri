@@ -3,54 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>相談 — コスめぐり</title>
+<title data-i18n="相談 — コスめぐり">相談 — コスめぐり</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b0b10">
-<link rel="stylesheet" href="/static/style.css?v=53">
+<!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
+     スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
+<script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
+<link rel="stylesheet" href="/static/style.css?v=76">
 </head>
 <body class="p-ask">
+<!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
+<header class="top" data-authed></header>
+<nav class="rail" aria-label="進みぐあい" data-i18n-aria-label="進みぐあい" data-step="ask"></nav>
 
 <main>
-  <h1 class="page-title">相談</h1>
-  <p class="page-lead">書くか、欄を埋めるか、どちらでも。6つそろうと一日ぶんを組み立てます。</p>
+  <h1 class="page-title" data-i18n="相談">相談</h1>
+  <p class="page-lead" data-i18n-html="ask.lead">欄を埋めて「この条件で組む」を押すと、一日ぶんを組み立てて <b>プラン</b> のページへ移ります。</p>
 
   <section class="card">
-    <h2>書いて伝える</h2>
-    <p class="note">まとめて書いても、ひとつずつでも構いません。読み取れたぶんは下の欄に入ります。</p>
-    <form id="ask-form" class="ask">
-      <textarea id="ask-text" rows="3" placeholder="例: 9/6のコミケに横浜駅から行きます。大荷物です。作品はブルーアーカイブ、キャラはアロナです"></textarea>
-      <div class="actions">
-        <button class="primary" type="submit">送る</button>
-        <button id="btn-reset" type="button" class="chat-reset">はじめから</button>
+    <h2 data-i18n="条件">条件</h2>
+    <p class="note" data-i18n="あとから1つだけ直して組み直すこともできます。">あとから1つだけ直して組み直すこともできます。</p>
+    <!-- 結果（できあがり・サーバの失敗）はここ1か所。足りない欄は欄の真下に出る（dom.js） -->
+    <div id="form-alert" class="form-alert" role="alert" hidden></div>
+    <div class="grid" id="slots-form">
+      <!-- 自由入力。収載イベント（「コミケ」でも通る）なら目的地と時刻を自動で埋める。候補は datalist で出す -->
+      <label data-slot="event_name"><span data-i18n="イベント名">イベント名</span><input id="slot-event" list="event-options" maxlength="60" autocomplete="off" placeholder="例: コミケ" data-i18n-placeholder="例: コミケ"></label>
+      <datalist id="event-options"></datalist>
+      <label data-slot="day"><span data-i18n="日付">日付</span><input id="slot-day" type="date"></label>
+      <label data-slot="destination_station"><span data-i18n="目的地（最寄り駅）">目的地（最寄り駅）</span><input id="slot-destination" list="destination-options" maxlength="40" autocomplete="off" placeholder="例: 国際展示場" data-i18n-placeholder="例: 国際展示場"></label>
+      <!-- 駅名の候補は打つたびにサーバ（駅すぱあと）に聞く。「大宮」→「大宮(埼玉県)」のように選べる -->
+      <datalist id="destination-options"></datalist>
+      <div class="time-pair">
+        <label data-slot="starts_time"><span data-i18n="開始">開始</span><input id="slot-starts" type="time"></label>
+        <label data-slot="ends_time"><span data-i18n="終了">終了</span><input id="slot-ends" type="time"></label>
       </div>
-    </form>
-    <div id="ask-log" class="chat-log"></div>
-  </section>
-
-  <section class="card">
-    <h2>条件をたしかめる</h2>
-    <p class="note">読み取りが違っていたら、ここで直せます。直したいものだけ触れば大丈夫です。</p>
-    <div class="grid">
-      <label data-slot="event_id">イベント<select id="slot-event"></select></label>
-      <label data-slot="day">日付<input id="slot-day" type="date"></label>
-      <label data-slot="title">作品名<input id="slot-title" maxlength="60" placeholder="例: ブルーアーカイブ"></label>
-      <label data-slot="character">キャラ名<input id="slot-character" maxlength="60" placeholder="例: アロナ"></label>
-      <label data-slot="origin_station">出発駅<input id="slot-station" maxlength="40" placeholder="例: 横浜"></label>
-      <label data-slot="luggage_mode">荷物<select id="slot-luggage">
-        <option value="light">手荷物だけ</option>
-        <option value="carry">キャリー1個</option>
-        <option value="heavy">キャリー＋ウィッグ＋大道具</option>
+      <label data-slot="title"><span data-i18n="作品名">作品名</span><input id="slot-title" maxlength="60" placeholder="例: ブルーアーカイブ" data-i18n-placeholder="例: ブルーアーカイブ"></label>
+      <label data-slot="character"><span data-i18n="キャラ名">キャラ名</span><input id="slot-character" maxlength="60" placeholder="例: アロナ" data-i18n-placeholder="例: アロナ"></label>
+      <label data-slot="origin_station"><span data-i18n="出発駅">出発駅</span><input id="slot-station" list="station-options" maxlength="40" autocomplete="off" placeholder="例: 横浜" data-i18n-placeholder="例: 横浜"></label>
+      <datalist id="station-options"></datalist>
+      <label data-slot="luggage_mode"><span data-i18n="荷物">荷物</span><select id="slot-luggage">
+        <option value="light" data-i18n="手荷物だけ">手荷物だけ</option>
+        <option value="carry" data-i18n="キャリー1個">キャリー1個</option>
+        <option value="heavy" data-i18n="キャリー＋ウィッグ＋大道具">キャリー＋ウィッグ＋大道具</option>
       </select></label>
     </div>
     <div class="actions">
-      <button id="btn-apply" class="primary">この条件で組む</button>
+      <button id="btn-apply" class="primary" data-i18n="この条件で組む">この条件で組む</button>
     </div>
-    <div id="slots-out" class="out"></div>
   </section>
 </main>
 
-<script type="module" src="/static/js/pages/ask.js?v=53"></script>
+<script type="module" src="/static/js/pages/ask.js?v=76"></script>
 </body>
 </html>

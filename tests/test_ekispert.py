@@ -15,10 +15,8 @@ import json
 
 from app.adapters.ekispert_transit import (
     MCP_URL,
-    REST_DISRUPTIONS,
     TOOL_SEARCH_ROUTES,
     EkispertTransit,
-    _normalize_line,
     _parse_routes,
     _tool_payload,
 )
@@ -127,72 +125,6 @@ def test_auth_header_matches_the_documentation():
     assert "text/event-stream" in headers["Accept"]
 
 
-# ---- 運行情報（REST。MCP に Tool が無いので直接叩く） ----
-
-DISRUPTIONS = {
-    "ResultSet": {
-        "Information": [
-            {
-                "status": "列車遅延",
-                "Line": {"code": "1", "Name": "ＪＲ京浜東北線"},
-                "Title": "人身事故の影響で遅れています",
-            },
-            {
-                "status": "平常運転",
-                "Line": {"code": "2", "Name": "りんかい線"},
-                "Title": "",
-            },
-            {
-                "status": "運転見合わせ",
-                "Line": {"code": "3", "Name": "無関係な線"},
-                "Title": "強風のため",
-            },
-        ]
-    }
-}
-
-
-def test_only_the_lines_on_my_route_are_reported(monkeypatch):
-    """全国ぶんが返るので、乗る予定の路線だけに絞る。"""
-    import asyncio
-
-    adapter = EkispertTransit(MCP_URL, "KEY")
-
-    async def fake_get(url, params):
-        assert url == REST_DISRUPTIONS
-        assert params["key"] == "KEY"
-        return DISRUPTIONS
-
-    monkeypatch.setattr(adapter, "_get_json", fake_get)
-    found = asyncio.run(adapter.disruptions(["JR京浜東北線", "りんかい線"]))
-
-    # 平常運転は落とし、経路に無い「無関係な線」も拾わない
-    assert [d.line for d in found] == ["ＪＲ京浜東北線"]
-    assert found[0].delay_minutes == 15
-    assert "人身事故" in found[0].detail
-    # 引けたので、画面は「乱れなし」と言い切ってよい
-    assert adapter.supports_disruptions is True
-
-
-def test_line_names_match_across_full_width_letters():
-    """「ＪＲ」と「JR」を別物にすると、遅延を取りこぼす。"""
-    assert _normalize_line("ＪＲ京浜東北線") == _normalize_line("JR京浜東北線")
-
-
-def test_unavailable_disruptions_are_not_reported_as_calm(monkeypatch):
-    """レスキューナウが契約外のとき、「乱れなし」と言わせない。"""
-    import asyncio
-
-    adapter = EkispertTransit(MCP_URL, "KEY")
-
-    async def fails(url, params):
-        return None
-
-    monkeypatch.setattr(adapter, "_get_json", fails)
-    assert asyncio.run(adapter.disruptions(["JR線"])) == []
-    assert adapter.supports_disruptions is False
-
-
 def test_station_names_drop_the_trailing_suffix():
     """利用者は「横浜駅」と書くが、マスタは「横浜」。落とさないと 400 になる。"""
     from app.adapters.ekispert_transit import _station
@@ -203,10 +135,104 @@ def test_station_names_drop_the_trailing_suffix():
 
 
 def test_http_logging_never_carries_the_access_key():
-    """駅すぱあとの REST はキーをクエリでしか受けない。httpx の INFO ログが
-    URL を丸ごと出すので、そこを塞いでいないとキーが平文でログに残る。"""
+    """httpx の INFO ログは URL を丸ごと出す。キーをクエリで渡す API を足したとき、
+    ここを塞いでいないとキーが平文でログに残る（一度そうなった）。"""
     import logging
 
     import app.main  # noqa: F401  — ここで logging の設定が走る
 
     assert logging.getLogger("httpx").level >= logging.WARNING
+
+
+async def test_unfound_route_is_marked_as_an_estimate_not_passed_off_as_real(monkeypatch):
+    """駅名は自由入力。打ち間違いで駅すぱあとが引けないとき、目安の経路を本物に見せない。"""
+    from datetime import datetime, timezone
+
+    from app.agents.route import RouteAgent
+    from app.adapters.stub_llm import StubLlm
+    from app.domain.models import LuggageMode
+
+    transit = EkispertTransit("https://api-mcp.ekispert.jp/mcp", "KEY")
+
+    async def nothing(tool, args):
+        return None
+
+    monkeypatch.setattr(transit, "_call", nothing)
+    plan = await RouteAgent(transit, StubLlm()).plan_outbound(
+        from_station="横浜",
+        to_station="おおみや",
+        arrive_by=datetime(2026, 8, 15, 4, 0, tzinfo=timezone.utc),
+        mode=LuggageMode.CARRY,
+    )
+    assert plan.segments and all(seg.estimated for seg in plan.segments)
+    assert "おおみや" in plan.warnings[0] and "駅名を確かめて" in plan.warnings[0]
+
+
+STATIONS = {
+    "ResultSet": {
+        "Point": [
+            {"Station": {"code": "21987", "Name": "大宮(埼玉県)", "Type": "train"}, "Prefecture": {"Name": "埼玉県"}},
+            {"Station": {"code": "25616", "Name": "大宮(京都府)", "Type": "train"}, "Prefecture": {"Name": "京都府"}},
+        ]
+    }
+}
+
+
+def test_station_candidates_are_read_from_get_stations():
+    from app.adapters.ekispert_transit import TOOL_GET_STATIONS, _parse_station_names
+
+    assert TOOL_GET_STATIONS == "ekispert_api_get_stations"
+    assert _parse_station_names(STATIONS) == ["大宮(埼玉県)", "大宮(京都府)"]
+    # 1件だと配列ではなくオブジェクトで返る
+    single = {"ResultSet": {"Point": STATIONS["ResultSet"]["Point"][0]}}
+    assert _parse_station_names(single) == ["大宮(埼玉県)"]
+    assert _parse_station_names(None) == []
+
+
+async def test_ambiguous_station_names_its_candidates_in_the_warning(monkeypatch):
+    """「大宮」は埼玉と京都にあり、駅すぱあとは探索を断る。選び直せる候補を添える。"""
+    from datetime import datetime, timezone
+
+    from app.adapters.stub_llm import StubLlm
+    from app.agents.route import RouteAgent
+    from app.domain.models import LuggageMode
+
+    transit = EkispertTransit("https://api-mcp.ekispert.jp/mcp", "KEY")
+    calls = []
+
+    async def fake(tool, args):
+        calls.append(tool)
+        return STATIONS if tool == "ekispert_api_get_stations" else None
+
+    monkeypatch.setattr(transit, "_call", fake)
+    plan = await RouteAgent(transit, StubLlm()).plan_outbound(
+        from_station="大宮",
+        to_station="国際展示場",
+        arrive_by=datetime(2026, 8, 15, 1, 0, tzinfo=timezone.utc),
+        mode=LuggageMode.CARRY,
+    )
+    assert "大宮(埼玉県)・大宮(京都府)" in plan.warnings[0]
+    # 候補は覚えておき、同じ名前で何度も聞かない
+    before = calls.count("ekispert_api_get_stations")
+    assert await transit.suggest_stations("大宮駅") == ["大宮(埼玉県)", "大宮(京都府)"]
+    assert calls.count("ekispert_api_get_stations") == before
+
+
+async def test_romaji_station_is_retried_with_its_only_candidate(monkeypatch):
+    """英語の画面からは「Yokohama」と書かれる。探索は断られても、候補が1つなら正式名で探し直す。"""
+    transit = EkispertTransit("https://api-mcp.ekispert.jp/mcp", "KEY")
+    searched = []
+
+    async def fake(tool, args):
+        if tool == "ekispert_api_get_stations":
+            name = {"Yokohama": "横浜"}.get(args["name"])
+            return {"ResultSet": {"Point": {"Station": {"Name": name}}}} if name else {"ResultSet": {}}
+        if tool == "ekispert_api_search_routes":
+            searched.append(args["viaList"])
+            return COURSE if args["viaList"] == "横浜:国際展示場" else None
+        return None
+
+    monkeypatch.setattr(transit, "_call", fake)
+    routes = await transit.search(from_station="Yokohama", to_station="国際展示場")
+    assert routes and not any(seg.estimated for seg in routes[0])
+    assert searched[-1] == "横浜:国際展示場"

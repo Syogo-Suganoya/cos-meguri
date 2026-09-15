@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 
-from app.domain.models import RouteSegment, ServiceDisruption
+from app.domain.models import RouteSegment
 from app.ports.transit import TransitPort
 
 # 会場最寄り駅と、その手前の乗換駅（デモ用の最小グラフ）
@@ -29,6 +29,14 @@ def _seed(*parts: str) -> int:
 
 class MockTransit(TransitPort):
     name = "ekispert:mock"
+
+    async def suggest_stations(self, name: str, *, limit: int = 8) -> list[str]:
+        """静的グラフに載っている駅から、書きかけの名前を含むものを返す。"""
+        wanted = name.strip().removesuffix("駅")
+        if not wanted:
+            return []
+        known = sorted({*_HUBS, *(hub for hubs in _HUBS.values() for hub, _ in hubs)})
+        return [station for station in known if wanted in station][:limit]
 
     async def search(
         self,
@@ -108,19 +116,3 @@ class MockTransit(TransitPort):
             )
 
         return routes[:max_routes]
-
-    async def disruptions(self, lines: list[str]) -> list[ServiceDisruption]:
-        # 既定では平常運転。当日デモでは DemoTransit 側で遅延を注入する
-        return []
-
-
-class DemoTransit(MockTransit):
-    """デモ用に運行障害を注入できるモック。当日モードの再現に使う。"""
-
-    name = "ekispert:demo"
-
-    def __init__(self, injected: list[ServiceDisruption] | None = None) -> None:
-        self.injected = injected or []
-
-    async def disruptions(self, lines: list[str]) -> list[ServiceDisruption]:
-        return [d for d in self.injected if d.line in set(lines)]

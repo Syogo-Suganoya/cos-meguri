@@ -12,8 +12,9 @@ Cloud Run はコンテナデプロイなので、ローカル・CI・本番が�
 docker compose up api
 ```
 
-Firestore エミュレータも一緒に立ち上がる（api はエミュレータの起動を待ってから上がる）。
-**データはエミュレータに残るので、コンテナを再起動しても消えない。**
+Firestore と Firebase Authentication のエミュレータも一緒に立ち上がる（api は両方の起動を待ってから上がる）。
+**データは Firestore エミュレータに残るので、コンテナを再起動しても消えない。**
+ログインのアカウントは認証エミュレータがメモリに持つので、`docker compose down` で消える。
 
 `http://localhost:8080` を開く。8080 が埋まっている環境ではホスト側ポートを変える。
 
@@ -32,12 +33,13 @@ docker compose up -d --build api
 
 | コマンド | 内容 |
 |---|---|
-| `docker compose up api` | API＋エージェント＋PWA＋Firestore エミュレータ |
+| `docker compose up api` | API＋エージェント＋PWA＋Firestore と認証のエミュレータ |
 | `docker compose --profile test run --rm test` | ユニットテスト（インメモリ） |
 | `docker compose --profile itest run --rm test-firestore` | Firestore アダプタの結合テスト |
 | `docker compose --profile docs run --rm diagram` | アーキテクチャ図の再生成 |
+| `docker compose --profile shots run --rm shots` | 画面操作イメージの撮影（api を起動しておく。`docs/shots/` に出る） |
 
-エミュレータのホスト側ポートは既定 `8210`（`FIRESTORE_PORT` で変更できる）。
+ホスト側ポートは Firestore エミュレータが既定 `8210`（`FIRESTORE_PORT`）、認証エミュレータが既定 `9099`（`AUTH_EMULATOR_PORT`）。
 データを消したいときは `docker compose down` でエミュレータごと落とす。
 
 ## 設定と mock / live
@@ -52,9 +54,9 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 | 環境変数 | mock（既定） | live |
 |---|---|---|
 | `EKISPERT_MODE` | 主要駅の静的グラフ | 駅すぱあと MCP |
-| `GEMINI_MODE` | キーワード抽出・固定文 | Gemini API（`gemini-3.7-flash`） |
+| `GEMINI_MODE` | 固定文 | Gemini API（`gemini-3.7-flash`） |
 | `REPOSITORY` | — | Firestore（既定）。`memory` はテスト専用 |
-| `AUTH_MODE` | 開発用ログイン（**ローカル専用**） | Firebase Authentication |
+| `AUTH_MODE` | —（`dev` はテスト専用） | Firebase Authentication（ローカルはエミュレータ） |
 
 変数名は**使う API の名前**にしてある。`VTO` / `TRANSIT` / `LLM` は業界の略語で、
 何が動くのか名前から分からなかったため。`/healthz` の `providers` もキーを同じ名前に
@@ -72,12 +74,19 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 
 ### 認証だけは例外
 
-`AUTH_MODE=dev` はコス名を入れるだけでJWTを発行し、**パスワードを検証しない**。
-`APP_ENV` が `local` / `test` 以外のときにこれを指定すると、起動時に例外で止まる
-（`adapters/registry.py: build_auth`）。設定ミスで本番に出る事故を潰すため、
-この分岐だけは mock フォールバックの対象外にしてある。
+ローカルも本番も **Firebase Authentication** で、ローカルは compose の認証エミュレータ（`firebase-auth`）に繋ぐ。
+エミュレータは本番と同じ Identity Toolkit の REST を喋るので、ログイン画面もトークンの検証も同じコードで通る。
+違うのは URL だけで、`FIREBASE_AUTH_EMULATOR_HOST`（サーバから見た場所）と
+`FIREBASE_AUTH_EMULATOR_URL`（ブラウザから見た場所）で切り替わる。
 
-live（Firebase Authentication）の経路:
+認証は mock に落とさない。次はどれも**起動時に例外で止まる**（`adapters/registry.py: build_auth`）。
+
+- `AUTH_MODE=dev`（名前を渡すだけで JWT を発行し、**パスワードを検証しない**）を `APP_ENV=test` 以外で指定した
+- **エミュレータの変数**を `APP_ENV` が local/test 以外で指定した。firebase-admin はこの変数があると
+  **署名の無いトークンを通す**ので、本番に紛れると誰でもなりすませる
+- `FIREBASE_PROJECT_ID` / `FIREBASE_WEB_API_KEY` が無い
+
+Firebase Authentication の経路:
 
 1. フロントが Identity Toolkit の REST を直接叩いて ID トークンを取得（JS SDK も CDN も使わない）
 2. 以降のリクエストは `Authorization: Bearer <IDトークン>`
@@ -94,23 +103,22 @@ app/
 ├── domain/             外部APIに依存しない純粋ロジック
 │   ├── models.py       設計書 §6 のデータモデル
 │   ├── makeup.py       キャラの色味・造形からのメイク工程分解（★中核）
-│   ├── crowd.py        更衣室の混雑予測モデル
 │   ├── luggage.py      大荷物制約の経路評価
-│   ├── awase.py        合わせの進捗・到着監視・リスケ起案
-│   ├── parsing.py      チャットの自由文からの条件抽出（LLM非依存）
+│   ├── favorites.py    お気に入りの写しを作る（見出しはキャラ名・イベント・日付）
 │   ├── guardrails.py   共有テキストからキャラ名・作品名を落とす（§7-4）
-│   └── events.py       収載イベントのマスタ
+│   └── events.py       収載イベントのマスタ（相談の欄の自動入力に使う。無いイベントも組める）
 ├── ports/              外部依存のインターフェース
 ├── adapters/           mock（既定）と live（駅すぱあと/Gemini/Firestore/Firebase Auth）
 ├── agents/             設計書 §4 のエージェント構成
 └── api/                HTTP 層
-web/                    PWA（ログイン・チャット・お知らせも自作）
+web/                    PWA（ログインも自作）
 ├── index.html          トップ（できること・使い方・ログイン）
-├── pages/              ask / login / prep / plan / day の5画面
-├── js/core/            全ページ共通（api・認証・枠・チャット・お知らせ・プラン復元）
+├── pages/              ask / login / signup / plan / me の5画面
+├── js/core/            全ページ共通（api・認証・枠・プラン復元）
 └── js/pages/           画面ごとの初期化。1画面1モジュール
-docs/                   アーキテクチャ図の生成スクリプト
-tests/                  ユニット116件＋Firestore結合9件
+docs/                   アーキテクチャ図と画面操作イメージ（shots.js・shots/）の生成
+docker/                 認証エミュレータと撮影用のイメージ
+tests/                  ユニット100件＋Firestore結合11件
 ```
 
 ### フロントの決めごと
@@ -118,17 +126,34 @@ tests/                  ユニット116件＋Firestore結合9件
 - **1画面1モジュール。**`<script type="module" src="/static/js/pages/plan.js">` だけを読む。
   バンドラは使わない。ページが持たない要素にハンドラを付けないので、
   「id が無くて例外」で画面全体が死ぬことがない（`core/dom.js` の `on()` がその役）
-- **枠（看板・シェブロン・お知らせ・脚注）は `core/shell.js` が差し込む。**
-  HTML を5枚に複製するとズレるので、枠の出どころはここ1箇所。
-  **相談は `/ask` の中だけ**にある（全ページ常駐の右サイドバーはやめた。
-  条件を確かめる場所と直す場所が分かれていると、どこを触れば結果が変わるのか分からない）
+- **枠（看板・シェブロン）の中身は `core/shell.js` が描く。**HTML をページごとに複製するとズレるので、中身の出どころはここ1箇所。
+  ただし**置き場所（空の `<header class="top">` と `<nav class="rail" data-step>`）は各ページの HTML に先に置く。**
+  通信を待ってから差し込むと、最初の一瞬は本文が左上に詰まって描かれ、画面遷移のたびに表示が飛ぶ。
+  看板の右端を出すページは `data-authed` を付ける。ログイン済みならマイページ・ログアウト、ゲストならログイン・新規登録を、
+  手元の控え（`store.isMember()`）で通信を待たずに描き分ける（`test_frame_space_is_reserved_before_any_script_runs`）
+- **ゲスト。**`/ask` と `/plan` は `requireSession()`。通行証が無ければ匿名ログインでゲストの通行証を取る。
+  `/me` は `requireMember()` で、ゲストは `/login?need=member` へ送る。ID トークンは1時間で切れるので、
+  401 は `core/api.js` が更新用トークンで1回だけ更新してから投げ直す。登録・ログインの直後は
+  `startSession()` が `/api/auth/adopt` でゲストの条件とプランを引き取る
+- **条件の入口は `/ask` の欄だけ。**自由文の読み取りは取り下げた（読み違いを確かめて直す
+  往復が要らなくなる）。「この条件で組む」でプランが組めたら `/plan` へ移る。留めると、押したのに
+  何も起きなかったように見える
 - **`onclick` 属性は使わない。**module スコープの関数は呼べず、押しても無言で何も起きない。
   イベント委譲（`data-*` 属性）で受ける。`tests/test_web_shell.py` が見張っている
 - **モジュールの先頭で実行する処理は、参照する `const` より後ろに置く。**
   前に置くと初期化前アクセスで例外になり、その画面だけ丸ごと動かない
-- **ページをまたぐ状態は `core/store.js` に集約する。**`exp_id` と `awase_id` だけを控え、
-  正はサーバ（`GET /api/chat` の `exp_id`）。合わせは一覧APIが無いので控えが必須
+- **フォームの誤りは2か所にしか出さない。**欄の不足や形の誤りはその欄の真下（`fieldError`）、
+  サーバの返事・通信の失敗・できあがりの知らせはフォームの頭（`formAlert`）。どちらも `core/dom.js`。
+  画面ごとに違う場所に出すと、押したあとに毎回探させる。ブラウザの吹き出しは使わない（`novalidate`）
+- **ページをまたぐ状態は `core/store.js` に集約する。**`exp_id` だけを控え、
+  正はサーバ（`GET /api/chat` の `exp_id`）
 - プランができたら `cosmeguri:expedition` を投げる。開いている画面がその場で描き直す
+- **画面の文言は日英。**訳の鍵は日本語の原文で、訳は `web/js/core/en.js`。
+  HTML は `data-i18n="原文"`（子要素の無い要素）・`data-i18n-html="鍵"`（`<b>` などを含む文）・
+  `data-i18n-placeholder` / `data-i18n-aria-label` で印を付け、JS の文言は `t("原文", {変数})` を通す。
+  文言を足したら en.js にも足す。印や訳の漏れは `tests/test_i18n.py` が落とす。
+  言語は端末に控え（ログインしていなくても英語で見られる）、通行証があればサーバにも伝えて、
+  組み上がったプランをその言語で組み直す。サーバの誤りは `detail.code` を `core/api.js` が言い直す
 
 ### 依存の向き
 
@@ -152,8 +177,8 @@ domain（外部依存なし・純粋関数）
 Gemini は「言い回しを整える」「母語に落とす」「文化的補足を足す」だけを担う。
 LLM が落ちても全工程が出る。件数が変わった LLM 応答は破棄してルールベースの結果を優先する。
 
-**チャットの「次に何を聞くか」も LLM に委ねない。** 抽出だけを LLM に任せ、
-不足項目の判定と質問はコード側（`agents/chat.py`）が持つ。聞き漏らしと堂々巡りを避けるため。
+**条件は LLM に読み取らせない。** 自由文から条件を抜き出す入口は取り下げ、欄で直接受ける。
+不足の判定は `ChatSlots.missing()` が持つ。読み違いを利用者に確かめさせる往復が要らなくなる。
 
 **API に無いものは持たない。** 駅設備（エレベータ・階段・コインロッカー）は駅すぱあと API に
 データが無いので、アプリからも扱わない。こちらで埋めると「EVで行ける」と表示しておいて
@@ -164,7 +189,7 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 
 **Firestore のクエリは単一フィールドの等値だけに絞る。** 複合条件は複合インデックスの
 作成をデプロイ手順に増やす。件数が小さいうちは1条件で引いて残りを Python 側で絞るほうが、
-運用の手数が少ない（`list_expeditions_on` の status 除外、`list_notifications` の未読絞りが該当）。
+運用の手数が少ない（`list_audit` の本人絞りが該当）。
 
 **イベント時刻は JST 固定。** 収載イベントはすべて日本開催なので、訪日レイヤーが自国の
 タイムゾーンから予定を入れても会場の時刻がずれない。利用者に見せる時刻は必ず
@@ -177,17 +202,19 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 
 | メソッド | パス | 内容 |
 |---|---|---|
-| GET | `/api/auth/config` | ログイン画面が使う公開情報（provider / web APIキー） |
-| POST | `/api/auth/dev-login` | 開発用ログイン（`AUTH_MODE=dev` のときだけ有効） |
-| POST | `/api/auth/session` | ログイン後にコス名アカウントを引き当てる／作る |
-| POST | `/api/chat` | チャット1往復。条件が揃えばプランまで組む |
-| PATCH | `/api/chat/slots` | 条件を直接書き換える（欄からの入力）。揃えばプランまで組む |
-| GET | `/api/me/notifications` | アプリ内お知らせ（未読数つき） |
-| POST | `/api/expeditions` | 遠征プラン一括生成（メイク・動線・更衣室） |
-| POST | `/api/expeditions/{id}/day-of` | 当日モードを1回進める（利用者の操作用） |
-| POST | `/api/awase` | 合わせ作成。招集はコス名で行う |
-| POST | `/api/awase/{id}/monitor` | 到着監視＋リスケ起案（確定はしない） |
-| POST | `/api/awase/{id}/proposals/{pid}/decision` | 主催者の承認/却下 |
+| GET | `/api/auth/config` | ログイン画面が使う公開情報（provider / web APIキー / 登録・ログイン・トークン更新の URL） |
+| POST | `/api/auth/dev-login` | テスト用ログイン（`APP_ENV=test` かつ `AUTH_MODE=dev` のときだけ有効） |
+| POST | `/api/auth/session` | ログイン後に uid からアカウントを引き当てる／作る。`guest` はゲスト（匿名ログイン）かどうか |
+| POST | `/api/auth/adopt` | ゲストのあいだに組んだ条件とプランを本人へ移す（body の `guest_token` は匿名ログインのものだけ受ける） |
+| GET | `/api/chat` | いまの条件と、足りない項目（`missing`） |
+| PATCH | `/api/chat/slots` | 条件を書き換える（相談の欄から）。揃えばプランまで組む。イベントは `event_name`（自由入力）・`destination_station`・`starts_time`/`ends_time`（HH:MM）で受ける。収載イベントに当たれば、空の目的地・時刻をマスタで埋める。終了 ≤ 開始は 422（`detail.field`） |
+| GET | `/api/events/match?name=` | イベント名を収載イベントに引き当てる（略称も）。相談の画面の自動入力用。無ければ `{"event": null}` |
+| GET | `/api/stations?name=` | 書きかけの駅名から正式な駅名の候補（駅すぱあと `get_stations`）。通行証（ゲスト可）が要る |
+| POST | `/api/expeditions` | 遠征プラン一括生成（メイク・動線）。`event_id` だけでも、名前＋目的地＋開始・終了でも組める |
+| GET | `/api/expeditions/{id}` | プランを引く（本人のものだけ） |
+| GET | `/api/me/favorites` | 本人のお気に入り（新しい順）。お気に入りの3本はゲストだと 403（`detail.reason: guest`） |
+| POST | `/api/me/favorites` | プランの一部（`kind`: makeup / route、route は `direction`）を写して保存。同じ部分は1件のまま |
+| DELETE | `/api/me/favorites/{id}` | お気に入りを消す（本人のものだけ。他人のものは 404） |
 | GET | `/api/audit` | 監査ログ |
 
 `/docs`（Swagger UI）でも一覧できる。
@@ -200,14 +227,15 @@ LLM が落ちても全工程が出る。件数が変わった LLM 応答は破�
 docker compose --profile test run --rm test
 ```
 
-ユニット・結合テスト（116件）。インメモリで回るので速い。`conftest.py` が保存先を
+ユニット・結合テスト（100件）。インメモリで回るので速い。`conftest.py` が保存先を
 明示的に `memory` に固定しているため、環境変数の指定漏れで実データベースを触ることはない。
+ログインもテスト用の実装（`AUTH_MODE=dev`）に固定しているので、認証エミュレータは要らない。
 
 ```bash
 docker compose --profile itest run --rm test-firestore
 ```
 
-Firestore アダプタの結合テスト（9件）。エミュレータに実際に読み書きする。
+Firestore アダプタの結合テスト（11件）。エミュレータに実際に読み書きする。
 **`adapters/firestore_repo.py` を触ったら必ず通すこと。** ここが無いと
 「ローカルでは動くのに本番で壊れる」という一番たちの悪い失敗をする。
 
@@ -217,18 +245,15 @@ Firestore アダプタの結合テスト（9件）。エミュレータに実際
 
 | 設計書 | 実装 | テスト |
 |---|---|---|
-| §4 エージェント構成 | `agents/` の7エージェント | `test_api.py` |
-| §7-1 素顔とコス名の分離 | 顔写真を受け取る経路を持たない | — |
-| §7-1 認証 | 保持するのは uid のみ。メールは Firebase 側に留める | `test_account_stores_no_personal_data` |
+| §4 エージェント構成 | `agents/`（Orchestrator・メイク・動線・多言語・相談） | `test_api.py` `test_ask.py` |
+| §7-1 素顔と名前を持たない | 顔写真を受け取る経路も、名前の欄も持たない | `test_account_stores_no_personal_data` |
+| §7-1 認証 | 保持するのは uid のみ。メールは Firebase 側に留める。パスワード無しのログインとエミュレータは外に出さない | `test_auth.py` |
 | §7-2 公平性 | 顔を見ない。明度を変える指示を出さない | `test_nothing_claims_to_have_measured_the_face` ほか |
-| §7-3 位置共有の時限性 | `LocationShare.expires_at`（失効後は ETA を採らない） | `test_location_share_goes_inactive_after_the_event` |
-| §7-4 二次創作ガイドライン | `guardrails.py`。共有テキストからキャラ名を落とす | `test_ip_guard_returns_422` |
-| §7-5 リスケの承認制 | 主催者以外は 403。起案だけでは枠が動かない | `test_shoot_does_not_move_until_organizer_approves` |
-| §7-6 通知をアプリ内で閉じる | 自律通知はお知らせ欄へ。会場時刻で書く | `test_day_of_alert_lands_in_the_in_app_inbox` |
-| §7-7 権限の境界 | 他人の遠征・お知らせ・合わせは見えない | `test_inbox_is_private_to_its_owner` ほか |
+| §7-4 二次創作ガイドライン | `guardrails.py`。共有テキストからキャラ名を落とす | `test_character_names_are_stripped_from_shared_text` |
+| §7-4 キャラ名は本人のお気に入りの見出しにだけ | 見出しはキャラ名（作品名）・イベント・日付。遠征の応答と他人の一覧には出ない | `test_favorite_titles_name_the_character_for_their_owner` `test_character_name_still_stays_out_of_the_shared_plan` |
+| §7-7 権限の境界 | 他人の遠征・条件・お気に入り・記録は見えない | `test_expedition_is_not_readable_by_others` `test_others_cannot_save_read_or_delete_my_favorites` |
+| §7-7 ゲスト | ゲストは相談とプランだけ。引き継ぎはゲストのトークンからだけで、他人の条件は吸い上げられない | `test_guest.py` |
 | §6 データモデル | Firestore と往復しても入れ子・列挙型が壊れない | `test_firestore.py` |
-| §11 生成メディア | キャラ名をプロンプトに入れない。AI生成を明示する | `test_look_prompt_never_contains_the_character_name` |
-| §11 ボイスクローン不使用 | 依頼を422で止め、証跡を残す | `test_voice_cloning_is_refused` |
 
 新しい振る舞いを足すときは、**設計書のどの主張を守るテストなのか**が分かる名前にする。
 
@@ -249,7 +274,7 @@ docker compose --profile docs run --rm diagram
 - **コメントと識別子の説明は日本語。** 「何をしているか」ではなく「なぜそうしたか」を書く
 - **設計書の条番号を引く。** プライバシー・公平性まわりの分岐には `（設計書 §7-1）` のように根拠を残す
 - 型ヒントは全面的に付ける。`from __future__ import annotations` を先頭に置く
-- Pydantic モデルはドメインの言葉で名付ける（`Layer` `Awase` `Expedition`）
+- Pydantic モデルはドメインの言葉で名付ける（`Layer` `Expedition` `ChatSlots`）
 - 外部APIの失敗は上位に例外を漏らさず、フォールバックを返す。ただし**認証の失敗だけは通す**（401にする）
 
 ### 静的ファイルを変えたとき
@@ -263,8 +288,8 @@ docker compose --profile docs run --rm diagram
 
 - `/static` は `Cache-Control: no-cache` を付けて配信している（`app/main.py` の
   `RevalidatingStaticFiles`）。ブラウザは毎回 ETag で確かめるので、変わっていなければ 304
-- Service Worker は `/static` を stale-while-revalidate で扱う。キャッシュを先に返しつつ
-  裏で取り直すので、`CACHE` 名の更新を忘れても1回ぶん遅れで新しくなる
+- Service Worker はページも `/static` も**ネットワーク優先**で、繋がらないときだけキャッシュを返す。
+  以前のキャッシュ優先（裏で取り直す）は変更が1回ぶん遅れて届き、消したフッターが残り続けたのでやめた
 
 ローカルで古いまま動いているように見えたら、DevTools で Service Worker を unregister して
 キャッシュを消すのが確実。
@@ -283,15 +308,16 @@ docker compose --profile docs run --rm diagram
   エージェント間の受け渡しは Python の関数呼び出し。ADK への載せ替えは `agents/` だけで済む形にしてある
 - **顔を見る機能は持たない。** 肌タイプ判定（YouCam）を外したので、メイク工程は
   キャラの色味・造形だけで組む。顔写真を受け取る経路がアプリのどこにも無い
-- **駅すぱあと MCP は公式ドキュメントに合わせたが、実キーでの疎通は未確認。**
+- **駅すぱあと MCP は実キーで経路探索まで疎通を確認した。** ダイヤ探索（時刻指定）は契約に無く、`plain` に落として引いている。
   応答の読み取りだけは `tests/test_ekispert.py` がドキュメントの例で検証している。
-  **この MCP に運行情報（遅延）の Tool は無い**ので、REST の
-  `/operationLine/service/rescuenow/information` を直接叩いている。レスキューナウは
-  契約に含まれないことがあり、引けなかったら `supports_disruptions` を False に倒して、
-  当日ページが「乱れなし」ではなく「運行情報は取れていません」と出す。
+  **運行情報（遅延）は扱わない。** MCP に Tool が無く、REST のレスキューナウも契約外で 403 だった。
+  遅延の通知ごとアプリから外した。
   **駅設備（EV・階段・ロッカー）は API 自体に無いので、機能ごと持たない**
-- **Firebase Authentication は実プロジェクトで未検証。** ローカルは開発用ログインで通しており、
-  `AUTH_MODE=firebase` の経路（Identity Toolkit REST → firebase-admin 検証）はコードのみ
+- **Firebase Authentication は実プロジェクトで未検証。** ローカルの認証エミュレータでは登録・ログイン・
+  誤入力・重複登録まで通している。実プロジェクトとの違いはトークンの署名（エミュレータは署名なし）で、
+  署名つきトークンの検証は本番で初めて通る。ゲスト（匿名ログイン）とトークンの更新もエミュレータでだけ確かめている
 - **Service Worker の登録は未確認。** `/sw.js` は正しい MIME で配信できているが、
   検証に使った組み込みブラウザが SW 登録を許可しないため、実ブラウザでの確認が要る
-- 中韓は `agents/i18n.py` の辞書に列を足せば有効になる（MVPは日英）
+- 中韓はまだ無い。サーバは `agents/i18n.py` と工程・注意書きの英語の分岐、画面は `core/en.js` と同じ形の辞書が要る（MVPは日英）
+- **駅名・路線名は駅すぱあとの日本語表記のまま出す。**英語の画面でも経路の駅名は日本語。
+  「Yokohama」のようなローマ字は、駅の候補が1つに絞れれば正式名で探し直す（「Tokyo」「Omiya」は候補が引けない）

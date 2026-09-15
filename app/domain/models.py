@@ -1,18 +1,18 @@
 """コスめぐりのドメインモデル（設計書 §6 データモデルに対応）。
 
 個人情報の扱いは §7 に従う:
-- レイヤーはコス名（handle）のみで成立し、本名・素顔と紐づけない
+- アカウントは認証基盤の uid だけで成立し、名前も本名も素顔も持たない
 - **顔画像は受け取らない**（解析する相手を持たないので、入口ごと作らない）
-- 位置共有はイベント当日限定
+- **位置は受け取らない**（合わせの機能ごと外したので、共有する相手がいない）
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Literal
+from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def utcnow() -> datetime:
@@ -34,7 +34,7 @@ def jst_hm(value: datetime) -> str:
     """会場時刻（JST）の HH:MM。
 
     利用者に見せる時刻は必ずこれを通す。クライアントから UTC で届いた
-    撮影枠などをそのまま書式化すると、9時間ずれた文面になるため。
+    時刻をそのまま書式化すると、9時間ずれた文面になるため。
     """
     aware = value if value.tzinfo else value.replace(tzinfo=JST)
     return aware.astimezone(JST).strftime("%H:%M")
@@ -87,29 +87,20 @@ class LuggageMode(str, Enum):
 class LayerPrefs(BaseModel):
     luggage_mode: LuggageMode = LuggageMode.CARRY
     home_event: str | None = None
-    share_location_default: bool = False
 
 
 class Layer(BaseModel):
-    """layers/{layerId} — コス名のみ。本名・素顔と紐づけない（設計書 §7-1）。
+    """layers/{layerId} — 名前を持たないアカウント（設計書 §7-1）。
 
-    auth_uid は認証基盤（Firebase Authentication / 開発用ログイン）が払い出す
+    auth_uid は認証基盤（Firebase Authentication / テスト用ログイン）が払い出す
     識別子。ここに入るのは不透明なIDだけで、メールアドレスは保持しない。
-    合わせに招待されただけでまだログインしていない人は auth_uid が None
-    （pending）のまま存在する。
     """
 
     layer_id: str
-    handle: str
     lang: Lang = Lang.JA
     prefs: LayerPrefs = Field(default_factory=LayerPrefs)
     auth_uid: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
-
-    @property
-    def is_pending(self) -> bool:
-        """招待済みだが本人のログイン前。"""
-        return self.auth_uid is None
 
 
 # ---------------------------------------------------------------- イベント
@@ -125,30 +116,32 @@ class EventMaster(BaseModel):
     station: str
     scale: Literal["mega", "large", "medium"]
     style: Literal["hall", "street"]  # hall=会場完結 / street=市街地回遊
-    dressing_rooms: int = 1
-    dressing_capacity: int = 120  # 同時収容人数（1室あたり）
     opens_at_hour: int = 9
     closes_at_hour: int = 17
     notes_ja: str = ""
     notes_en: str = ""
 
-    @property
-    def expected_cosplayers(self) -> int:
-        return {"mega": 12000, "large": 3000, "medium": 900}[self.scale]
+
+# 収載イベントに当たらないイベント（ローカルイベントなど）の event_id
+CUSTOM_EVENT_ID = "custom"
 
 
 class EventRef(BaseModel):
-    """expeditions/{expId}.event — マスタ参照＋当日の日時。"""
+    """expeditions/{expId}.event — 行き先と当日の日時。
+
+    収載イベントならマスタの値、それ以外（CUSTOM_EVENT_ID）は相談の欄に書かれた値で埋まる。
+    """
 
     event_id: str
     name: str
     venue: str
+    station: str = ""  # 目的地（最寄り駅）。古い保存データには無い
     starts_at: datetime
     ends_at: datetime
 
     @property
     def date_key(self) -> str:
-        """開催日（JST）の YYYY-MM-DD。当日バッチの絞り込みキー。"""
+        """開催日（JST）の YYYY-MM-DD。日付で引くときのキー。"""
         return self.starts_at.astimezone(JST).strftime("%Y-%m-%d")
 
 
@@ -229,6 +222,8 @@ class RouteSegment(BaseModel):
     line: str
     minutes: int
     fare_yen: int = 0
+    # 駅すぱあとで引けず、静的グラフの目安に落ちた区間。駅名の打ち間違いを本物の経路に見せないための印
+    estimated: bool = False
 
 
 class RoutePlan(BaseModel):
@@ -250,53 +245,13 @@ class RoutePlan(BaseModel):
         return self.effective_minutes - self.base_minutes
 
 
-class ServiceDisruption(BaseModel):
-    line: str
-    status: str
-    delay_minutes: int
-    detail: str
-
-
-# ---------------------------------------------------------------- 更衣室
-
-
-class CrowdLevel(str, Enum):
-    CALM = "calm"
-    BUSY = "busy"
-    PEAK = "peak"
-
-    @property
-    def label_ja(self) -> str:
-        return {CrowdLevel.CALM: "空き", CrowdLevel.BUSY: "混雑", CrowdLevel.PEAK: "ピーク"}[self]
-
-
-class DressingSlot(BaseModel):
-    """30分刻みの更衣室予測。MVPは実データ非連携のモデル値（設計書 §9）。"""
-
-    starts_at: datetime
-    predicted_users: int
-    capacity: int
-    occupancy: float  # 予測利用者 / 収容
-    wait_minutes: int
-    level: CrowdLevel
-
-
-class DressingPlan(BaseModel):
-    event_id: str
-    slots: list[DressingSlot] = Field(default_factory=list)
-    recommended_entry: datetime | None = None
-    recommended_exit: datetime | None = None
-    teardown_alert_at: datetime | None = None
-    rationale: str = ""
-    is_model_estimate: bool = True  # 実測ではないことを常に明示する
-
-
 # ---------------------------------------------------------------- 遠征
 
 
 class ExpeditionStatus(str, Enum):
     DRAFT = "draft"
     PLANNED = "planned"
+    # 当日モードを外したので、いまは誰も書かない。保存済みの値を読めるように残す
     DAY_OF = "day_of"
     DONE = "done"
 
@@ -319,7 +274,7 @@ class Expedition(BaseModel):
     status: ExpeditionStatus = ExpeditionStatus.DRAFT
     lang: Lang = Lang.JA
     event: EventRef
-    # 開催日（JST）の YYYY-MM-DD。当日バッチが日付で引くための冗長フィールド。
+    # 開催日（JST）の YYYY-MM-DD。日付で引くための冗長フィールド。
     # 入れ子フィールドの範囲検索を避け、Firestore 側を等値1本で済ませる。
     event_date: str = ""
     character: CharacterRef
@@ -327,167 +282,95 @@ class Expedition(BaseModel):
     origin_station: str = ""
     makeup: MakeupPlan | None = None
     routes: dict[str, RoutePlan] = Field(default_factory=dict)
-    dressing: DressingPlan | None = None
-    awase_id: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# ---------------------------------------------------------------- 合わせ
+# ---------------------------------------------------------------- お気に入り
 
 
-class MemberProgress(str, Enum):
-    INVITED = "invited"
-    ACCEPTED = "accepted"
-    PREPARING = "preparing"
-    EN_ROUTE = "en_route"
-    ARRIVED = "arrived"
-    DRESSED = "dressed"
-
-    @property
-    def rank(self) -> int:
-        return list(MemberProgress).index(self)
+class FavoriteKind(str, Enum):
+    MAKEUP = "makeup"
+    ROUTE = "route"
 
 
-class LocationShare(BaseModel):
-    """設計書 §7-3: 当日限定フラグ。expires_at を過ぎたら値ごと捨てる。"""
+class Favorite(BaseModel):
+    """favorites/{favoriteId} — 気に入ったメイク工程・動線の写し。
 
-    enabled: bool = False
-    eta: datetime | None = None
-    expires_at: datetime | None = None
+    元の遠征（exp_id）を指すだけにすると、条件を直して組み直した瞬間に中身が変わる。
+    保存した時点のものを残したいので、工程・経路をそのまま写して持つ。
+    写しはサーバが本人の遠征から作る。クライアントから届いた中身は保存しない。
 
-    def is_active(self, now: datetime | None = None) -> bool:
-        now = now or utcnow()
-        return bool(self.enabled and self.expires_at and now < self.expires_at)
-
-    def redacted(self) -> "LocationShare":
-        return LocationShare(enabled=False, eta=None, expires_at=None)
-
-
-class AwaseMember(BaseModel):
-    layer_id: str
-    handle: str
-    lang: Lang = Lang.JA
-    is_organizer: bool = False
-    progress: MemberProgress = MemberProgress.INVITED
-    location: LocationShare = Field(default_factory=LocationShare)
-    exp_id: str | None = None
-
-
-class Shoot(BaseModel):
-    """awase/{awaseId}.shoots[] — 撮影枠。"""
-
-    shoot_id: str
-    starts_at: datetime
-    minutes: int = 30
-    place: str = ""
-    photographer: str | None = None
-    member_ids: list[str] = Field(default_factory=list)
-
-
-class RescheduleProposal(BaseModel):
-    """設計書 §7-5: 起案までが自律。確定は主催者承認を経る。"""
-
-    proposal_id: str
-    awase_id: str
-    shoot_id: str
-    current_start: datetime
-    proposed_start: datetime
-    delay_minutes: int
-    reason: str
-    blocking_members: list[str] = Field(default_factory=list)
-    status: Literal["proposed", "approved", "rejected"] = "proposed"
-    decided_by: str | None = None
-    decided_at: datetime | None = None
-
-
-class Awase(BaseModel):
-    """awase/{awaseId} — 合わせの集約ルート。"""
-
-    awase_id: str
-    title: str
-    event: EventRef
-    members: list[AwaseMember] = Field(default_factory=list)
-    shoots: list[Shoot] = Field(default_factory=list)
-    proposals: list[RescheduleProposal] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=utcnow)
-
-    @property
-    def organizer(self) -> AwaseMember | None:
-        for m in self.members:
-            if m.is_organizer:
-                return m
-        return self.members[0] if self.members else None
-
-    def member(self, layer_id: str) -> AwaseMember | None:
-        for m in self.members:
-            if m.layer_id == layer_id:
-                return m
-        return None
-
-
-# ---------------------------------------------------------------- 監査
-
-
-class NotificationKind(str, Enum):
-    """アプリ内お知らせの種別。UI の見せ方と、既読管理の単位になる。"""
-
-    ROUTE_DELAY = "route_delay"  # 遅延で経路を再計算した
-    TEARDOWN = "teardown"  # 撤収の目安
-    AWASE_INVITE = "awase_invite"  # 合わせへの招待
-    RESCHEDULE_REQUEST = "reschedule_request"  # 主催者への承認依頼
-    RESCHEDULE_RESULT = "reschedule_result"  # 承認/却下の結果
-    INFO = "info"
-
-
-class Notification(BaseModel):
-    """notifications/{notificationId} — アプリ内のお知らせ。
-
-    外部メッセージング（LINE等）は使わず、当日モードの自律通知もここへ積む。
-    宛先はコス名アカウント（layerId）で、端末や電話番号は持たない。
+    見出しにはキャラ名・作品名を入れる。お気に入りは本人にしか返さないため（設計書 §7-4）。
     """
 
-    notification_id: str
+    favorite_id: str
     layer_id: str
-    kind: NotificationKind = NotificationKind.INFO
-    message: str
+    kind: FavoriteKind
+    label: str
+    exp_id: str
+    # 動線のときだけ。行き（outbound）か帰り（return）か
+    direction: Literal["outbound", "return"] | None = None
+    event: EventRef
     lang: Lang = Lang.JA
-    awase_id: str | None = None
-    exp_id: str | None = None
-    read: bool = False
+    makeup: MakeupPlan | None = None
+    route: RoutePlan | None = None
     created_at: datetime = Field(default_factory=utcnow)
 
 
 # ---------------------------------------------------------------- チャット
 
 
-class ChatRole(str, Enum):
-    USER = "user"
-    AGENT = "agent"
-
-
-class ChatMessage(BaseModel):
-    role: ChatRole
-    text: str
-    created_at: datetime = Field(default_factory=utcnow)
-
-
 class ChatSlots(BaseModel):
     """遠征プランを組むために埋める必要のある項目。
 
-    チャットは自由文で受けるが、最終的にこの型に落ちるまで質問を続ける。
+    「相談」ページの欄がそのままこの型になる。イベントは名前・目的地（最寄り駅）・
+    開始・終了で表す。収載イベントの名前なら、目的地と時刻はマスタで埋まる（書き換えてよい）。
+    ローカルイベントのように収載に無いイベントも、3つを自分で埋めれば組める。
     """
 
-    event_id: str | None = None
+    event_name: str | None = None
+    event_id: str | None = None  # 収載イベントに当たったときだけ入る
     day: datetime | None = None
+    destination_station: str | None = None
+    starts_time: str | None = None  # "HH:MM"（JST）
+    ends_time: str | None = None
     title: str | None = None  # 作品名
     character: str | None = None  # キャラ名
     origin_station: str | None = None
     luggage_mode: LuggageMode | None = None
 
+    REQUIRED: ClassVar[tuple[str, ...]] = (
+        "event_name",
+        "day",
+        "destination_station",
+        "starts_time",
+        "ends_time",
+        "title",
+        "character",
+        "origin_station",
+        "luggage_mode",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_from_legacy_event_id(cls, data):
+        """イベントを event_id だけで持っていた頃の保存データを読み戻す。
+
+        名前・目的地・時刻をマスタで補わないと、組み上がっていた条件が「足りない」に戻る。
+        """
+        if not isinstance(data, dict) or not data.get("event_id") or data.get("event_name"):
+            return data
+        from app.domain.events import event_defaults, get_event  # events が models を読むので、ここで引く
+
+        event = get_event(data["event_id"])
+        if event is None:
+            return data
+        filled = {k: data.get(k) or v for k, v in event_defaults(event).items()}
+        return {**data, **filled, "event_name": event.name}
+
     def missing(self) -> list[str]:
-        order = ["event_id", "day", "title", "character", "origin_station", "luggage_mode"]
-        return [name for name in order if getattr(self, name) is None]
+        return [name for name in self.REQUIRED if getattr(self, name) is None]
 
     @property
     def is_complete(self) -> bool:
@@ -495,11 +378,14 @@ class ChatSlots(BaseModel):
 
 
 class ChatSession(BaseModel):
-    """chats/{layerId} — 1レイヤーにつき1本の対話。"""
+    """chats/{layerId} — 1レイヤーにつき1組の条件。
+
+    自由文の会話は取り下げた（条件は画面の欄から直接入れる）。以前のドキュメントに
+    残っている `messages` は読み込み時に無視される。
+    """
 
     layer_id: str
     lang: Lang = Lang.JA
-    messages: list[ChatMessage] = Field(default_factory=list)
     slots: ChatSlots = Field(default_factory=ChatSlots)
     exp_id: str | None = None  # 組み上がった遠征
     updated_at: datetime = Field(default_factory=utcnow)
@@ -509,36 +395,36 @@ class ChatSession(BaseModel):
 
 
 class AuditAction(str, Enum):
-    # 顔解析と試着を取り下げたので、いまは誰も書かない（値だけ残す）
+    # いま書くのは ACCOUNT_LINKED だけ。ほかは取り下げた機能のぶんで、
+    # 過去に保存した記録を読み戻せるように値だけ残す（Firestore に文字列で入っている）
+    ACCOUNT_LINKED = "account_linked"  # 認証IDとコス名アカウントの紐付け
+    # 顔解析と試着
     FACE_IMAGE_DISCARDED = "face_image_discarded"
-    FITTING_IMAGE_DISCARDED = "fitting_image_discarded"  # 同上
+    FITTING_IMAGE_DISCARDED = "fitting_image_discarded"
+    # 合わせ（位置共有・時間変更の承認）と定期実行
     LOCATION_SHARE_ENABLED = "location_share_enabled"
-    # 定期実行を外したので、いまは誰も書かない。過去に保存した記録を
-    # 読み戻せるように値は残す（Firestore に文字列で入っている）
     LOCATION_SHARE_PURGED = "location_share_purged"
     RESCHEDULE_PROPOSED = "reschedule_proposed"
     RESCHEDULE_APPROVED = "reschedule_approved"
     RESCHEDULE_REJECTED = "reschedule_rejected"
-    # 試着と画像生成を取り下げたので、いまは誰も書かない（値だけ残す）
-    IP_GUARD_BLOCKED = "ip_guard_blocked"
-    EXPEDITION_PURGED = "expedition_purged"  # 同上（いまは誰も書かない）
-    ACCOUNT_LINKED = "account_linked"  # 認証IDとコス名アカウントの紐付け
     PROGRESS_UPDATED_BY_ORGANIZER = "progress_updated_by_organizer"
+    # 試着と画像生成
+    IP_GUARD_BLOCKED = "ip_guard_blocked"
+    EXPEDITION_PURGED = "expedition_purged"
     # 生成メディアを取り下げたので、いまは誰も書かない（設計書 §11）。理由は上と同じ
     MEDIA_GENERATED = "media_generated"
     VOICE_CLONE_BLOCKED = "voice_clone_blocked"
 
 
 class AuditLog(BaseModel):
-    """audit/{logId} — 画像破棄・共有期間・リスケ承認の証跡（設計書 §7）。"""
+    """audit/{logId} — 自分のデータがどう扱われたかの記録（設計書 §7）。"""
 
     log_id: str
     actor: str
     action: AuditAction
     subject_id: str | None = None
-    # この記録が「誰のこと」か。actor はエージェント名のことがあり
-    # （awase-agent など）、subject_id も遠征IDや合わせIDが入るので、持ち主だけは
-    # 独立して持つ。記録の一覧を本人ぶんに絞るのに使う。
+    # この記録が「誰のこと」か。actor や subject_id が本人以外を指す記録も
+    # 読み戻すことがあるので、持ち主だけは独立して持つ。一覧を本人ぶんに絞るのに使う。
     layer_ids: list[str] = Field(default_factory=list)
     payload: dict = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)

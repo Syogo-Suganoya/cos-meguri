@@ -1,7 +1,7 @@
-"""経路・運行実況のポート（駅すぱあと API MCPサーバー）。
+"""経路のポート（駅すぱあと API MCPサーバー）。
 
-大荷物制約の評価に必要なのは所要・運賃だけでなく、階段の数と
-エレベータ有無。RouteSegment にその設備情報を載せて返す。
+大荷物の負担は乗換の回数で測るので、区間ごとの所要・運賃・路線があれば足りる。
+運行情報（遅延）は扱わない。遅延の通知ごとアプリから外した。
 """
 
 from __future__ import annotations
@@ -9,15 +9,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from app.domain.models import RouteSegment, ServiceDisruption
+from app.domain.models import RouteSegment
 
 
 class TransitPort(ABC):
     name: str = "ekispert"
-
-    # 運行情報（遅延）を実データで取れるか。取れない提供元があるので、
-    # 「乱れなし」と「そもそも見ていない」を呼び出し側が区別できるようにする
-    supports_disruptions: bool = True
 
     @abstractmethod
     async def search(
@@ -31,6 +27,10 @@ class TransitPort(ABC):
     ) -> list[list[RouteSegment]]:
         """複数の経路候補を、区間列のリストとして返す。"""
 
-    @abstractmethod
-    async def disruptions(self, lines: list[str]) -> list[ServiceDisruption]:
-        """当日の運行障害を返す。"""
+    async def suggest_stations(self, name: str, *, limit: int = 8) -> list[str]:
+        """書きかけの駅名から、経路探索にそのまま渡せる正式な駅名の候補を返す。
+
+        「大宮」は埼玉と京都にあり、そのままでは探索できない（「大宮(埼玉県)」と書く必要がある）。
+        駅名は自由入力なので、相談の画面で候補から選べるようにする。引けなければ空。
+        """
+        return []

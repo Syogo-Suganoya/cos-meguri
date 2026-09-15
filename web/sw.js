@@ -1,6 +1,6 @@
 /* 会場は電波が悪い。シェルだけ先にキャッシュして、APIは常にネットワークを見る。 */
 
-const CACHE = "cos-meguri-v30";
+const CACHE = "cos-meguri-v53";
 
 // ページとモジュールを両方いれる。ここに実在しないURLが混じると install が
 // 丸ごと失敗するので、tests/test_web_shell.py で全部 200 になることを見ている。
@@ -8,23 +8,26 @@ const SHELL = [
   "/",
   "/ask",
   "/login",
-  "/prep",
+  "/signup",
   "/plan",
-  "/day",
-  "/static/style.css?v=53",
+  "/me",
+  "/static/style.css?v=76",
   "/static/js/core/dom.js",
   "/static/js/core/api.js",
   "/static/js/core/store.js",
   "/static/js/core/auth.js",
   "/static/js/core/shell.js",
-  "/static/js/core/inbox.js",
-    "/static/js/core/expedition.js",
+  "/static/js/core/expedition.js",
+  "/static/js/core/credentials.js",
+  "/static/js/core/en.js",
+  "/static/js/core/i18n.js",
+  "/static/js/core/favorites.js",
   "/static/js/pages/ask.js",
   "/static/js/pages/home.js",
   "/static/js/pages/login.js",
-  "/static/js/pages/prep.js",
+  "/static/js/pages/signup.js",
   "/static/js/pages/plan.js",
-  "/static/js/pages/day.js",
+  "/static/js/pages/me.js",
   "/static/icon.svg",
   "/favicon.svg",
   "/apple-touch-icon.png",
@@ -56,37 +59,28 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  // API 応答はキャッシュしない（進捗・混雑・位置は鮮度が命）
+  // API 応答はキャッシュしない（プランは組み直すたびに変わる）
   if (url.pathname.startsWith("/api/")) return;
 
-  // ページはネットワーク優先。キャッシュ優先にすると、デプロイしても
-  // 古いビルドに固定されたままになる
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => caches.match(request).then((hit) => hit || caches.match("/")))
-    );
-    return;
-  }
-
-  // 静的ファイルはキャッシュを先に返しつつ、裏で取り直して次回に備える。
-  // JS モジュールは URL にバージョンを付けられないので、CACHE 名の更新を
-  // 忘れても1回ぶん遅れで自然に新しくなるようにしておく
+  // ページも静的ファイルもネットワーク優先。繋がらないときだけキャッシュを返す。
+  //
+  // 以前は静的ファイルをキャッシュ優先（裏で取り直す）にしていたが、JS モジュールは
+  // URL にバージョンを付けられないので、直しても「1回ぶん遅れて」しか届かなかった。
+  // 消したはずのフッターがリロードしても残る、まで行ったのでやめた。サーバは ETag を
+  // 返しているので、変わっていなければ 304 で済み、電波の悪い会場でも重くならない
   event.respondWith(
-    caches.match(request).then((hit) => {
-      const network = fetch(request)
-        .then((res) => {
+    fetch(request)
+      .then((res) => {
+        if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => hit);
-      return hit || network;
-    })
+        }
+        return res;
+      })
+      .catch(() =>
+        caches
+          .match(request)
+          .then((hit) => hit || (request.mode === "navigate" ? caches.match("/") : Response.error()))
+      )
   );
 });

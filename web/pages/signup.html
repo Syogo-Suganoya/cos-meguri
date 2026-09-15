@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="アカウントを作る — コスめぐり">アカウントを作る — コスめぐり</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b10">
+<!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
+     スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
+<script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
+<link rel="stylesheet" href="/static/style.css?v=76">
+</head>
+<body class="p-login">
+<!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
+<header class="top"></header>
+
+<main>
+  <h1 class="page-title" data-i18n="アカウントを作る">アカウントを作る</h1>
+
+  <section class="card login-card">
+    <h2 data-i18n="メールで登録">メールで登録</h2>
+    <!-- サーバの返事と通信の失敗はここ1か所。欄の誤りは欄の真下に出る（dom.js） -->
+    <div id="form-alert" class="form-alert" role="alert" hidden></div>
+    <form id="login-form" class="login-form" novalidate>
+      <label><span data-i18n="メールアドレス">メールアドレス</span><input id="fb-email" type="email" autocomplete="email" required></label>
+      <label><span data-i18n="パスワード（6文字以上）">パスワード（6文字以上）</span><input id="fb-password" type="password" autocomplete="new-password" required></label>
+      <label><span data-i18n="パスワード（確認）">パスワード（確認）</span><input id="fb-password-confirm" type="password" autocomplete="new-password" required></label>
+      <div class="actions">
+        <button id="btn-submit" type="submit" class="primary" data-i18n="登録する">登録する</button>
+      </div>
+    </form>
+
+    <p class="login-switch"><span data-i18n="アカウントを持っている方は">アカウントを持っている方は</span> <a id="to-login" href="/login" data-i18n="ログイン">ログイン</a></p>
+  </section>
+</main>
+
+<script type="module" src="/static/js/pages/signup.js?v=76"></script>
+</body>
+</html>

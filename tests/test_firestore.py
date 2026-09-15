@@ -13,29 +13,24 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
-from app.domain import awase as awase_rules
 from app.domain.models import (
     AuditAction,
     AuditLog,
-    Awase,
-    AwaseMember,
     CharacterRef,
-    ChatMessage,
-    ChatRole,
     ChatSession,
     EventRef,
     Expedition,
     ExpeditionStatus,
+    Favorite,
+    FavoriteKind,
     Lang,
     Layer,
     LuggageMode,
-    Notification,
-    NotificationKind,
-    Shoot,
+    MakeupPlan,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -75,7 +70,6 @@ async def test_layer_roundtrip_keeps_every_field(repo):
     """入れ子（設定）と列挙型が往復しても壊れない。"""
     layer = Layer(
         layer_id=f"ly_{_uid()}",
-        handle=f"テスト{_uid()}",
         lang=Lang.EN,
         auth_uid=f"uid_{_uid()}",
     )
@@ -84,24 +78,36 @@ async def test_layer_roundtrip_keeps_every_field(repo):
 
     stored = await repo.get_layer(layer.layer_id)
     assert stored is not None
-    assert stored.handle == layer.handle
+    assert stored.auth_uid == layer.auth_uid
     assert stored.lang is Lang.EN
     assert stored.prefs.luggage_mode is LuggageMode.HEAVY
 
 
-async def test_layer_can_be_found_by_uid_and_handle(repo):
-    uid, handle = f"uid_{_uid()}", f"コス名{_uid()}"
-    layer = Layer(layer_id=f"ly_{_uid()}", handle=handle, auth_uid=uid)
+async def test_layer_can_be_found_by_uid(repo):
+    uid = f"uid_{_uid()}"
+    layer = Layer(layer_id=f"ly_{_uid()}", auth_uid=uid)
     await repo.save_layer(layer)
 
     assert (await repo.get_layer_by_uid(uid)).layer_id == layer.layer_id
-    assert (await repo.find_layer_by_handle(handle)).layer_id == layer.layer_id
     assert await repo.get_layer_by_uid(f"uid_{_uid()}") is None
+
+
+async def test_layer_saved_with_a_handle_still_loads(repo):
+    """レイヤー名を持っていた頃のドキュメントも読める。落ちるとその人はログインできない。"""
+    layer_id, uid = f"ly_{_uid()}", f"uid_{_uid()}"
+    await repo._run(
+        repo._set,
+        "layers",
+        layer_id,
+        {"layer_id": layer_id, "handle": "レイヤーD977D4", "auth_uid": uid, "lang": "ja"},
+    )
+    stored = await repo.get_layer_by_uid(uid)
+    assert stored.layer_id == layer_id
+    assert "handle" not in stored.model_dump()
 
 
 async def test_missing_document_returns_none(repo):
     assert await repo.get_layer(f"ly_{_uid()}") is None
-    assert await repo.get_awase(f"aw_{_uid()}") is None
     assert await repo.get_chat(f"ly_{_uid()}") is None
 
 
@@ -133,58 +139,61 @@ async def test_saving_twice_updates_instead_of_duplicating(repo):
         character=CharacterRef(title="作品A", name="キャラB"),
     )
     await repo.save_expedition(exp)
-    exp.status = ExpeditionStatus.DAY_OF
+    exp.status = ExpeditionStatus.PLANNED
     await repo.save_expedition(exp)
 
     stored = await repo.list_expeditions(exp.layer_id)
     assert len(stored) == 1
-    assert stored[0].status is ExpeditionStatus.DAY_OF
+    assert stored[0].status is ExpeditionStatus.PLANNED
 
 
-# ---------------------------------------------------------------- お知らせ
+async def test_expedition_saved_with_a_dressing_forecast_still_loads(repo):
+    """更衣室の予測を持っていた頃の遠征も読める。落ちるとプランのページが開かない。"""
+    exp = Expedition(
+        exp_id=f"exp_{_uid()}",
+        layer_id=f"ly_{_uid()}",
+        event=_event(),
+        event_date=_event().date_key,
+        character=CharacterRef(title="作品A", name="キャラB"),
+    )
+    data = exp.model_dump(mode="json")
+    data["dressing"] = {"event_id": "acosta", "slots": [], "is_model_estimate": True}
+    await repo._run(repo._set, "expeditions", exp.exp_id, data)
+
+    stored = await repo.get_expedition(exp.exp_id)
+    assert stored.exp_id == exp.exp_id
+    assert "dressing" not in stored.model_dump()
 
 
-async def test_notifications_are_scoped_and_ordered(repo):
-    mine, other = f"ly_{_uid()}", f"ly_{_uid()}"
-    old = Notification(
-        notification_id=f"ntf_{_uid()}",
-        layer_id=mine,
-        kind=NotificationKind.TEARDOWN,
-        message="古い",
+# ---------------------------------------------------------------- お気に入り
+
+
+async def test_favorites_are_listed_newest_first_and_can_be_deleted(repo):
+    layer_id, other = f"ly_{_uid()}", f"ly_{_uid()}"
+    old = Favorite(
+        favorite_id=f"fav_{_uid()}",
+        layer_id=layer_id,
+        kind=FavoriteKind.MAKEUP,
+        label="古い",
+        exp_id=f"exp_{_uid()}",
+        event=_event(),
+        makeup=MakeupPlan(total_minutes=10),
         created_at=DAY,
     )
-    new = Notification(
-        notification_id=f"ntf_{_uid()}",
-        layer_id=mine,
-        kind=NotificationKind.ROUTE_DELAY,
-        message="新しい",
-        created_at=DAY + timedelta(hours=1),
+    new = old.model_copy(
+        update={"favorite_id": f"fav_{_uid()}", "label": "新しい", "created_at": DAY.replace(hour=12)}
     )
-    theirs = Notification(
-        notification_id=f"ntf_{_uid()}", layer_id=other, message="他人あて"
-    )
-    for n in (old, new, theirs):
-        await repo.save_notification(n)
+    theirs = old.model_copy(update={"favorite_id": f"fav_{_uid()}", "layer_id": other})
+    for f in (old, new, theirs):
+        await repo.save_favorite(f)
 
-    items = await repo.list_notifications(mine)
-    assert [n.message for n in items] == ["新しい", "古い"]  # 新しい順
-    assert all(n.layer_id == mine for n in items)
+    mine = await repo.list_favorites(layer_id)
+    assert [f.label for f in mine] == ["新しい", "古い"]
+    assert mine[0].makeup.total_minutes == 10
 
-
-async def test_marking_read_ignores_other_peoples_notifications(repo):
-    mine, other = f"ly_{_uid()}", f"ly_{_uid()}"
-    a = Notification(notification_id=f"ntf_{_uid()}", layer_id=mine, message="自分あて")
-    b = Notification(notification_id=f"ntf_{_uid()}", layer_id=other, message="他人あて")
-    await repo.save_notification(a)
-    await repo.save_notification(b)
-
-    # 他人あてのIDを混ぜても既読にできない
-    assert await repo.mark_notifications_read(mine, [a.notification_id, b.notification_id]) == 1
-    assert await repo.list_notifications(mine, unread_only=True) == []
-    assert len(await repo.list_notifications(other, unread_only=True)) == 1
-
-    # 二度目は既読済みなので0件
-    assert await repo.mark_notifications_read(mine, [a.notification_id]) == 0
+    assert await repo.delete_favorite(old.favorite_id) is True
+    assert await repo.delete_favorite(old.favorite_id) is False
+    assert [f.label for f in await repo.list_favorites(layer_id)] == ["新しい"]
 
 
 # ---------------------------------------------------------------- チャット
@@ -193,20 +202,66 @@ async def test_marking_read_ignores_other_peoples_notifications(repo):
 async def test_chat_session_roundtrip(repo):
     layer_id = f"ly_{_uid()}"
     session = ChatSession(layer_id=layer_id, lang=Lang.JA)
-    session.messages.append(ChatMessage(role=ChatRole.USER, text="コミケに行きます"))
     session.slots.event_id = "comiket"
     session.slots.day = DAY
     session.slots.luggage_mode = LuggageMode.HEAVY
     await repo.save_chat(session)
 
     stored = await repo.get_chat(layer_id)
-    assert stored.messages[0].role is ChatRole.USER
     assert stored.slots.event_id == "comiket"
     assert stored.slots.luggage_mode is LuggageMode.HEAVY
     assert stored.slots.day.date() == DAY.date()
 
 
-# ---------------------------------------------------------------- 合わせ
+async def test_chat_saved_by_the_old_free_text_version_still_loads(repo):
+    """自由文の会話を持っていた頃のドキュメントには messages が残っている。
+
+    読めずに落ちると、その人は「相談」ページを開いた瞬間から先へ進めなくなる。
+    """
+    layer_id = f"ly_{_uid()}"
+    await repo._run(
+        repo._set,
+        "chats",
+        layer_id,
+        {
+            "layer_id": layer_id,
+            "lang": "ja",
+            "messages": [{"role": "user", "text": "コミケに行きます"}],
+            "slots": {"event_id": "comiket"},
+        },
+    )
+    stored = await repo.get_chat(layer_id)
+    assert stored.slots.event_id == "comiket"
+
+
+async def test_chat_saved_with_only_an_event_id_keeps_its_destination_and_times(repo):
+    """目的地と開始・終了を持つ前のドキュメント。補わないと、組み上がっていた条件が「足りない」に戻る。"""
+    layer_id = f"ly_{_uid()}"
+    await repo._run(
+        repo._set,
+        "chats",
+        layer_id,
+        {
+            "layer_id": layer_id,
+            "lang": "ja",
+            "slots": {
+                "event_id": "acosta",
+                "day": DAY.isoformat(),
+                "title": "作品A",
+                "character": "キャラB",
+                "origin_station": "横浜",
+                "luggage_mode": "carry",
+            },
+            "exp_id": "exp_old",
+        },
+    )
+    stored = await repo.get_chat(layer_id)
+    assert stored.slots.is_complete
+    assert (stored.slots.event_name, stored.slots.destination_station) == ("acosta!", "池袋")
+    assert (stored.slots.starts_time, stored.slots.ends_time) == ("10:00", "17:00")
+
+
+# ---------------------------------------------------------------- 監査
 
 
 async def test_audit_can_be_filtered_by_subject(repo):

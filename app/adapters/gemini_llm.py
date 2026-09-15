@@ -8,12 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 
 import httpx
 
-from app.domain.models import JST
-from app.domain.parsing import extract_slots as keyword_slots
 from app.ports.llm import LlmPort
 
 logger = logging.getLogger(__name__)
@@ -134,39 +131,3 @@ class GeminiLlm(LlmPort):
             "Plain sentences, no headings."
         )
         return (await self._generate(prompt)) or fallback
-
-    async def explain(self, prompt: str, *, fallback: str) -> str:
-        return (await self._generate(prompt)) or fallback
-
-    async def extract_slots(self, text: str, *, known_events: list[dict]) -> dict:
-        # LLM が落ちても会話が止まらないよう、キーワード抽出を土台に置く
-        fallback = keyword_slots(text, known_events)
-        catalog = json.dumps(
-            [{"event_id": e.get("event_id"), "name": e.get("name")} for e in known_events],
-            ensure_ascii=False,
-        )
-        prompt = (
-            "コスプレ遠征の相談文から、次のキーをJSONで抜き出してください。"
-            "読み取れないキーは省き、推測で埋めないこと。\n"
-            "event_id（次の一覧から選ぶ）, day（ISO8601、日本時間）, title（作品名）, "
-            "character（キャラ名）, origin_station（出発駅）, "
-            "luggage_mode（light/carry/heavy のいずれか）\n"
-            f"イベント一覧: {catalog}\n"
-            f"本日: {datetime.now(JST).date().isoformat()}（日本時間）\n"
-            f"相談文: {text}"
-        )
-        raw = await self._generate(prompt, json_mode=True)
-        if not raw:
-            return fallback
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return fallback
-        if not isinstance(parsed, dict):
-            return fallback
-
-        allowed = {"event_id", "day", "title", "character", "origin_station", "luggage_mode"}
-        merged = dict(fallback)
-        # LLM が読み取れた項目で上書きする（空文字・null は無視）
-        merged.update({k: v for k, v in parsed.items() if k in allowed and v})
-        return merged

@@ -1,20 +1,13 @@
 """永続化のポート（Firestore / インメモリ）。
 
-設計書 §6 のコレクション（layers / expeditions / awase / audit）に対応する。
+設計書 §6 のコレクション（layers / expeditions / favorites / chats / audit）に対応する。
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from app.domain.models import (
-    AuditLog,
-    Awase,
-    ChatSession,
-    Expedition,
-    Layer,
-    Notification,
-)
+from app.domain.models import AuditLog, ChatSession, Expedition, Favorite, Layer
 
 
 class RepositoryPort(ABC):
@@ -31,10 +24,6 @@ class RepositoryPort(ABC):
     async def get_layer_by_uid(self, auth_uid: str) -> Layer | None:
         """認証IDからコス名アカウントを引く。ログインのたびに使う。"""
 
-    @abstractmethod
-    async def find_layer_by_handle(self, handle: str) -> Layer | None:
-        """コス名で引く。合わせの招待（未ログインの相手）で使う。"""
-
     # -- expeditions ----------------------------------------------------
     @abstractmethod
     async def save_expedition(self, exp: Expedition) -> Expedition: ...
@@ -45,27 +34,20 @@ class RepositoryPort(ABC):
     @abstractmethod
     async def list_expeditions(self, layer_id: str) -> list[Expedition]: ...
 
-    # -- awase ----------------------------------------------------------
+    # -- favorites -------------------------------------------------------
     @abstractmethod
-    async def save_awase(self, awase: Awase) -> Awase: ...
+    async def save_favorite(self, favorite: Favorite) -> Favorite: ...
 
     @abstractmethod
-    async def get_awase(self, awase_id: str) -> Awase | None: ...
+    async def get_favorite(self, favorite_id: str) -> Favorite | None: ...
 
     @abstractmethod
-    async def list_awase(self) -> list[Awase]: ...
-
-    # -- notifications ---------------------------------------------------
-    @abstractmethod
-    async def save_notification(self, notification: Notification) -> Notification: ...
+    async def list_favorites(self, layer_id: str) -> list[Favorite]:
+        """本人のお気に入りを新しい順で返す。"""
 
     @abstractmethod
-    async def list_notifications(
-        self, layer_id: str, *, unread_only: bool = False
-    ) -> list[Notification]: ...
-
-    @abstractmethod
-    async def mark_notifications_read(self, layer_id: str, ids: list[str]) -> int: ...
+    async def delete_favorite(self, favorite_id: str) -> bool:
+        """消せたら True。無ければ False。"""
 
     # -- chat ------------------------------------------------------------
     @abstractmethod
@@ -82,4 +64,3 @@ class RepositoryPort(ABC):
     async def list_audit(
         self, *, subject_id: str | None = None, layer_id: str | None = None
     ) -> list[AuditLog]: ...
-

@@ -1,8 +1,8 @@
-"""開発用ログイン。Firebase の設定が無くてもアプリを通しで動かすための実装。
+"""テスト専用のログイン。Firebase を立てずに API の結合テストを回すための実装。
 
-コス名を入れるだけで短命の JWT を発行する。**パスワードを検証しない**ので
-本番では絶対に使わない。registry がローカル以外で live を要求されたときに
-これへ落ちないよう、config 側で明示的に選ばせている。
+名前を渡すだけで短命の JWT を発行する。**パスワードを検証しない**ので、
+APP_ENV=test 以外では registry が起動を止める。ローカルで画面を触るときは
+認証エミュレータを使う。
 
 自前で持つのは HMAC の署名鍵だけで、資格情報は保管しない。
 """
@@ -27,17 +27,17 @@ class DevAuth(AuthPort):
         self.secret = secret
         self.ttl_seconds = ttl_seconds
 
-    def issue(self, handle: str, *, uid: str | None = None) -> dict:
-        """コス名から開発用トークンを発行する。"""
-        if not handle.strip():
-            raise AuthError("コス名を入力してください")
+    def issue(self, user: str, *, anonymous: bool = False) -> dict:
+        """テスト用の利用者名からトークンを発行する。anonymous はゲスト（匿名ログイン）の再現。"""
+        if not user.strip():
+            raise AuthError("利用者名を入力してください")
         now = int(time.time())
-        # 同じコス名なら同じ uid になるようにして、再ログインで別人にならないようにする
-        subject = uid or f"dev_{uuid.uuid5(uuid.NAMESPACE_OID, handle).hex[:12]}"
+        # 同じ名前なら同じ uid。テストで「再ログインしても同じ人」を再現する
+        prefix = "guest" if anonymous else "dev"
         payload = {
             "iss": ISSUER,
-            "sub": subject,
-            "handle": handle,
+            "sub": f"{prefix}_{uuid.uuid5(uuid.NAMESPACE_OID, user).hex[:12]}",
+            "anon": anonymous,
             "iat": now,
             "exp": now + self.ttl_seconds,
         }
@@ -53,17 +53,12 @@ class DevAuth(AuthPort):
             )
         except jwt.PyJWTError as exc:
             raise AuthError(f"開発トークンが無効です: {exc}") from exc
-
         return AuthIdentity(
-            uid=str(payload["sub"]),
-            provider="dev",
-            suggested_handle=payload.get("handle"),
+            uid=str(payload["sub"]), provider="dev", anonymous=bool(payload.get("anon"))
         )
 
     def client_config(self) -> dict:
         return {
             "provider": "dev",
-            "dev_login": True,
-            # 画面に警告を出すためのフラグ。パスワード検証をしていないことを隠さない
-            "warning": "開発用ログインです（パスワード検証なし）。本番では Firebase Authentication を使います。",
+            "warning": "テスト用ログインです（パスワード検証なし）。",
         }

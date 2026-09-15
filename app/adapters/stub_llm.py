@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-from app.domain.parsing import extract_slots as keyword_slots
 from app.ports.llm import LlmPort
 
 # デモで使うキャラ像の既定値（作品名・キャラ名は内部入力に留まる）。
@@ -57,9 +56,3 @@ class StubLlm(LlmPort):
 
     async def cultural_note(self, event_name: str, *, lang: str, fallback: str) -> str:
         return _CULTURAL_NOTES.get(lang) or fallback
-
-    async def explain(self, prompt: str, *, fallback: str) -> str:
-        return fallback
-
-    async def extract_slots(self, text: str, *, known_events: list[dict]) -> dict:
-        return keyword_slots(text, known_events)

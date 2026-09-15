@@ -10,29 +10,22 @@ google-cloud-firestore の同期クライアントをスレッドに逃がして
 from __future__ import annotations
 
 import asyncio
-import uuid
-from datetime import datetime
 
 from google.cloud import firestore
 
-from app.domain import awase as awase_domain
 from app.domain.models import (
-    AuditAction,
     AuditLog,
-    Awase,
     ChatSession,
     Expedition,
-    ExpeditionStatus,
+    Favorite,
     Layer,
-    Notification,
     utcnow,
 )
 from app.ports.repository import RepositoryPort
 
 COL_LAYERS = "layers"
 COL_EXPEDITIONS = "expeditions"
-COL_AWASE = "awase"
-COL_NOTIFICATIONS = "notifications"
+COL_FAVORITES = "favorites"
 COL_CHATS = "chats"
 COL_AUDIT = "audit"
 
@@ -64,9 +57,6 @@ class FirestoreRepository(RepositoryPort):
 
     async def get_layer_by_uid(self, auth_uid: str) -> Layer | None:
         return await self._find_layer("auth_uid", auth_uid)
-
-    async def find_layer_by_handle(self, handle: str) -> Layer | None:
-        return await self._find_layer("handle", handle)
 
     async def _find_layer(self, field: str, value: str) -> Layer | None:
         def query() -> dict | None:
@@ -104,62 +94,39 @@ class FirestoreRepository(RepositoryPort):
 
         return [Expedition.model_validate(d) for d in await self._run(query)]
 
-    # -- awase ----------------------------------------------------------
-    async def save_awase(self, awase: Awase) -> Awase:
-        await self._run(self._set, COL_AWASE, awase.awase_id, awase.model_dump(mode="json"))
-        return awase
-
-    async def get_awase(self, awase_id: str) -> Awase | None:
-        data = await self._run(self._get, COL_AWASE, awase_id)
-        return Awase.model_validate(data) if data else None
-
-    async def list_awase(self) -> list[Awase]:
-        def query() -> list[dict]:
-            return [d.to_dict() for d in self._db.collection(COL_AWASE).stream()]
-
-        return [Awase.model_validate(d) for d in await self._run(query)]
-
-    # -- notifications ---------------------------------------------------
-    async def save_notification(self, notification: Notification) -> Notification:
+    # -- favorites -------------------------------------------------------
+    async def save_favorite(self, favorite: Favorite) -> Favorite:
         await self._run(
-            self._set,
-            COL_NOTIFICATIONS,
-            notification.notification_id,
-            notification.model_dump(mode="json"),
+            self._set, COL_FAVORITES, favorite.favorite_id, favorite.model_dump(mode="json")
         )
-        return notification
+        return favorite
 
-    async def list_notifications(
-        self, layer_id: str, *, unread_only: bool = False
-    ) -> list[Notification]:
+    async def get_favorite(self, favorite_id: str) -> Favorite | None:
+        data = await self._run(self._get, COL_FAVORITES, favorite_id)
+        return Favorite.model_validate(data) if data else None
+
+    async def list_favorites(self, layer_id: str) -> list[Favorite]:
         def query() -> list[dict]:
             docs = (
-                self._db.collection(COL_NOTIFICATIONS)
+                self._db.collection(COL_FAVORITES)
                 .where(filter=firestore.FieldFilter("layer_id", "==", layer_id))
                 .stream()
             )
             return [d.to_dict() for d in docs]
 
-        items = [Notification.model_validate(d) for d in await self._run(query)]
-        if unread_only:
-            items = [n for n in items if not n.read]
-        return sorted(items, key=lambda n: n.created_at, reverse=True)
+        # 並べ替えは Python 側。order_by を足すと複合インデックスが要る
+        items = [Favorite.model_validate(d) for d in await self._run(query)]
+        return sorted(items, key=lambda f: f.created_at, reverse=True)
 
-    async def mark_notifications_read(self, layer_id: str, ids: list[str]) -> int:
-        def update() -> int:
-            count = 0
-            for notification_id in ids:
-                ref = self._db.collection(COL_NOTIFICATIONS).document(notification_id)
-                snap = ref.get()
-                data = snap.to_dict() if snap.exists else None
-                # 他人の通知を既読にできないよう、宛先を確認してから更新する
-                if not data or data.get("layer_id") != layer_id or data.get("read"):
-                    continue
-                ref.update({"read": True})
-                count += 1
-            return count
+    async def delete_favorite(self, favorite_id: str) -> bool:
+        def delete() -> bool:
+            ref = self._db.collection(COL_FAVORITES).document(favorite_id)
+            if not ref.get().exists:
+                return False
+            ref.delete()
+            return True
 
-        return await self._run(update)
+        return await self._run(delete)
 
     # -- chat ------------------------------------------------------------
     async def save_chat(self, session: ChatSession) -> ChatSession:

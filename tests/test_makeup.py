@@ -79,6 +79,9 @@ def test_english_plan_is_fully_translated():
     assert not has_japanese(joined), joined
     assert plan.lang is Lang.EN
     assert all(not has_japanese(note) for note in plan.notes)
+    # 根拠のタグも英語で出る。日本語のまま残ると、英語の工程表にタグだけ日本語が並ぶ
+    tags = [tag for step in plan.steps for tag in step.personalized_for]
+    assert tags and not any(has_japanese(tag) for tag in tags), tags
 
 
 def test_missing_character_colours_do_not_leave_holes():

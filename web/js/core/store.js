@@ -5,10 +5,8 @@
 
 const TOKEN = "cos-meguri.token";
 const EXP = "cos-meguri.exp_id";
-const AWASE = "cos-meguri.awase_id";
-// 開発用ログインで使うコス名。これがアカウントの鍵になるので、
-// ログアウトしても消さない（消すと前の自分に戻れなくなる）
-const LOGIN = "cos-meguri.login";
+const REFRESH = "cos-meguri.refresh";
+const GUEST = "cos-meguri.guest";
 
 const local = {
   get: (k) => {
@@ -28,21 +26,33 @@ const local = {
 };
 
 export const token = () => local.get(TOKEN);
-export const setToken = (v) => local.set(TOKEN, v);
+export const refreshToken = () => local.get(REFRESH);
+
+/** 通行証を持つ。guest はログインしていない人（Firebase の匿名ログイン）。 */
+export function setTokens({ idToken, refreshToken = null, guest = false }) {
+  local.set(TOKEN, idToken);
+  local.set(REFRESH, refreshToken);
+  local.set(GUEST, guest ? "1" : null);
+}
+
+/** 通行証だけを差し替える（更新したとき）。ゲストかどうかは変わらない。 */
+export function renewTokens({ idToken, refreshToken }) {
+  local.set(TOKEN, idToken);
+  if (refreshToken) local.set(REFRESH, refreshToken);
+}
+
+/** 看板を通信なしで描き分けるために、ゲストかどうかも手元に控える。 */
+export const isGuest = () => Boolean(token()) && local.get(GUEST) === "1";
+export const isMember = () => Boolean(token()) && local.get(GUEST) !== "1";
 
 export const expId = () => local.get(EXP);
 export const setExpId = (v) => local.set(EXP, v);
 
-export const awaseId = () => local.get(AWASE);
-export const setAwaseId = (v) => local.set(AWASE, v);
-
-export const loginHandle = () => local.get(LOGIN);
-export const setLoginHandle = (v) => local.set(LOGIN, v);
-
 export function clearSession() {
   local.set(TOKEN, null);
+  local.set(REFRESH, null);
+  local.set(GUEST, null);
   local.set(EXP, null);
-  local.set(AWASE, null);
   try {
     sessionStorage.clear();
   } catch {

@@ -16,7 +16,6 @@ from diagrams.gcp.compute import Run
 from diagrams.gcp.database import Firestore
 from diagrams.gcp.ml import AIPlatform
 from diagrams.gcp.operations import Logging
-from diagrams.gcp.storage import Storage
 from diagrams.gcp.security import Iam
 from diagrams.onprem.client import Client, Users
 from diagrams.onprem.network import Internet
@@ -46,20 +45,19 @@ def main() -> None:
         node_attr=NODE_ATTR,
         edge_attr=EDGE_ATTR,
     ):
-        users = Users("レイヤー\n（コス名のみ）")
-        pwa = Client("PWA（自作UI）\n案内トップ＋ログイン＋機能3ページ\n「AIに相談」は全ページ常駐")
+        users = Users("レイヤー\n（名前を持たない）")
+        pwa = Client("PWA（自作UI）\n案内トップ＋ログイン＋相談・プラン")
 
         with Cluster("Cloud Run（Docker / python:3.12-slim）", graph_attr={"fontname": FONT}):
-            app = Run("FastAPI + Pydantic\nOrchestrator と7エージェント")
+            app = Run("FastAPI + Pydantic\nOrchestrator と4エージェント")
 
         with Cluster("外部API", graph_attr={"fontname": FONT}):
             gemini = AIPlatform("Gemini API\ngemini-3.7-flash")
             ekispert = Internet("駅すぱあと\nMCPサーバー")
 
         with Cluster("GCP", graph_attr={"fontname": FONT}):
-            auth = Iam("Firebase Authentication\nIDトークン")
-            firestore = Firestore("Firestore\n通知・チャットも同居")
-            storage = Storage("Cloud Storage\n一時画像")
+            auth = Iam("Firebase Authentication\nIDトークン（ローカルはエミュレータ）")
+            firestore = Firestore("Firestore\n相談の条件も同居")
             logging = Logging("Cloud Logging\n監査ログ")
 
         # 定期実行は持たない。処理はすべて利用者の操作を起点にする（設計書 §7-8）
@@ -67,7 +65,7 @@ def main() -> None:
         pwa >> Edge(label="ログイン", style="dashed") >> auth
         app >> Edge(label="検証", style="dashed") >> auth
         app >> [gemini, ekispert]
-        app >> [firestore, storage, logging]
+        app >> [firestore, logging]
 
 
 if __name__ == "__main__":
