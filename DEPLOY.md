@@ -2,7 +2,7 @@
 
 コスめぐりを Cloud Run に載せる手順。**CLI（gcloud）** と **画面操作（Google Cloud コンソール）** の
 2通りを併記する。どちらでも結果は同じなので、片方だけ実行すればよい。
-初回のあと自動化したい場合は **パターンC: GitHub Actions（CD）**（現在オフ）を使う。
+初回のあとは **パターンC: GitHub Actions（CD）** が main への push で自動デプロイする。
 
 開発環境の作り方は [CONTRIBUTING.md](CONTRIBUTING.md)、設計の背景は [設計書.md](設計書.md) を参照。
 
@@ -53,10 +53,11 @@ gcloud services enable \
 ## 1. Firestore を作る
 
 ```bash
-gcloud firestore databases create --location=asia-northeast1
+gcloud firestore databases create --location=asia-northeast1 --database=cos-meguri
 ```
 
-データベースIDを省略すると `(default)`、種別は Native モードになる。アプリはこれを前提にしている。
+**データベース ID は `cos-meguri`。** `(default)` は使わない（`app/adapters/firestore_repo.py`
+に固定で書いてある）。種別は Native モード。
 
 > [!NOTE]
 > **Cloud Run には `FIRESTORE_EMULATOR_HOST` を設定しないこと。** 設定されていると
@@ -144,7 +145,7 @@ gcloud run deploy cos-meguri \
 ## 6. 動作確認
 
 ```bash
-curl -s https://SERVICE_URL/healthz
+curl -s https://SERVICE_URL/health
 ```
 
 `providers` が期待どおりか見る。`auth` は **`auth:firebase` ちょうど**であること。
@@ -182,7 +183,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 1. 検索窓から **Firestore** → 「データベースを作成」
 2. モード: **Native モード**
 3. ロケーション: **asia-northeast1（東京）**
-4. データベースID: `(default)` のまま
+4. データベースID: `cos-meguri`
 5. 「データベースを作成」
 
 ## 2. 実行用サービスアカウント
@@ -244,7 +245,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 ## 6. 動作確認
 
 1. **Cloud Run → cos-meguri** のページ上部に出ている URL を開く
-2. 末尾に `/healthz` を付けて、`providers` が期待どおりか確認する
+2. 末尾に `/health` を付けて、`providers` が期待どおりか確認する
 3. **ログ** タブで起動時の警告（`... が未設定のため mock で起動します`）が出ていないか見る
 
 ---
@@ -252,14 +253,13 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 # パターンC: GitHub Actions（CD）
 
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml) に、テスト → デプロイ →
-`/healthz` 確認までを通す CD を置いてある。やっていることはパターンAの手順5と同じで、
+`/health` 確認までを通す CD を置いてある。やっていることはパターンAの手順5と同じで、
 **手順0〜4（API有効化・Firestore・サービスアカウント・シークレット・Firebase Auth）は
 先に済ませておく必要がある**。
 
 > [!NOTE]
-> **この CD は現在オフにしてある。** push トリガーはコメントアウト済みで、
-> `deploy` ジョブも変数 `CD_ENABLED` が `true` のときだけ動く。
-> 今の状態で走らせても、テストだけ通って `deploy` はスキップされる。
+> **main への push（`*.md` と `docs/` だけの変更は除く）で走る。** ただし `deploy` ジョブは
+> 変数 `CD_ENABLED` が `true` のときだけ動き、無ければテストだけ通ってデプロイはスキップされる。
 
 ## 何をするワークフローか
 
@@ -267,7 +267,7 @@ CLI と同じことを画面から行う。番号はパターンAと対応して
 |---|---|
 | `test` | `compose --profile test`（インメモリ）と `--profile itest`（Firestore エミュレータ）を実行。APIキーは要らない |
 | `deploy` | Workload Identity 連携で認証し、`--source .` で Cloud Run にデプロイ。環境変数とシークレット参照は手順5と同じ |
-| 最後のステップ | 新リビジョンの `/healthz` を叩き、`auth:firebase` でなければ失敗させる |
+| 最後のステップ | 新リビジョンの `/health` を叩き、`auth:firebase` でなければ失敗させる |
 
 サービスアカウントキーの JSON は保存しない。GitHub の OIDC トークンを
 Workload Identity プールで短命の資格情報に交換する。
@@ -322,10 +322,10 @@ gcloud iam service-accounts add-iam-policy-binding \
 | Variable | `EKISPERT_MCP_URL` | `https://api-mcp.ekispert.jp/mcp`（固定） |
 | Variable | `CD_ENABLED` | `true` ← **これを入れるまでデプロイは走らない** |
 
-**4. トリガーを開ける**
+**4. トリガー**
 
-`deploy.yml` の `push:` ブロックのコメントを外す。main への push（`*.md` と `docs/` を除く）で
-デプロイが走るようになる。
+`deploy.yml` の `push:` トリガーは有効にしてある。main への push（`*.md` と `docs/` を除く）で走る。
+手動で走らせるときは Actions タブ → Deploy to Cloud Run → Run workflow。
 
 ## 止めかた
 
@@ -336,10 +336,14 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 # 本番前のチェック
 
-`/healthz` の `warnings` に、設定の取り違えが出る。**空配列であることを確認する。**
+`/health` の `warnings` に、設定の取り違えが出る。**空配列であることを確認する。**
+
+> [!IMPORTANT]
+> **稼働確認は `/health`。`/healthz` にはしない。** Cloud Run の手前の Google のフロントエンドが
+> `/healthz` を横取りし、アプリに渡さず自分の 404 HTML を返す（`/health` `/readyz` `/nope` は届く）。
 
 ```bash
-curl -s https://SERVICE_URL/healthz | python3 -m json.tool
+curl -s https://SERVICE_URL/health | python3 -m json.tool
 ```
 
 | warnings に出るもの | 意味 | 対処 |
@@ -358,7 +362,7 @@ curl -s https://SERVICE_URL/healthz | python3 -m json.tool
 | 対象 | 守りかた |
 |---|---|
 | 利用者向けAPI | Firebase の ID トークン検証（アプリ側） |
-| PWA・`/healthz`・`/api/auth/config` | 公開 |
+| PWA・`/health`・`/api/auth/config` | 公開 |
 
 Cloud Run の IAM（`--allow-unauthenticated` を外す方法）は使えない。PWA を
 ブラウザから直接開かせる以上、サービス自体は公開せざるを得ないため。
@@ -394,6 +398,7 @@ gcloud run services update-traffic cos-meguri --to-revisions=REVISION_NAME=100
 | 「使ってみる」でログインの画面に飛ばされる | Firebase コンソールの Authentication →「ログイン方法」で**「匿名」が有効**か。無効だとゲストの通行証が取れない |
 | 401 が返る | ID トークンの期限切れ。PWA は更新用トークンで1回だけ更新して投げ直す。それでも通らなければ、ゲストは新しいゲストで開き直し、ログインした人はログインの画面へ |
 | Firestore の書き込みが失敗 | 実行サービスアカウントに `roles/datastore.user` が付いているか |
+| `404 The database (default) does not exist` | データベース ID が `cos-meguri` になっているか（`gcloud firestore databases list --project=cos-meguri`） |
 | 書き込んだデータが見つからない | `FIRESTORE_EMULATOR_HOST` が設定されていないか確認（本番では未設定が正しい） |
 | 再起動でデータが消える | `providers.repository` が `repository:memory` になっている |
 | ビルドが失敗 | Cloud Build のログ。`pyproject.toml` の依存解決で落ちていることが多い |
