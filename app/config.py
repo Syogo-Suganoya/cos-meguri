@@ -62,9 +62,6 @@ class Settings(BaseSettings):
     # 既定言語（設計書 §5 多言語。MVPは日英、追加は設定のみ）
     default_lang: str = "ja"
 
-    # 設計書 §7-1: 顔画像は処理後即破棄。保持するのは数値スコアのみ。
-    face_image_retention_seconds: int = 0
-
 
 @lru_cache
 def get_settings() -> Settings:

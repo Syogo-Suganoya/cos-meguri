@@ -48,6 +48,12 @@ def repo():
     return FirestoreRepository(os.environ.get("GOOGLE_CLOUD_PROJECT", "cos-meguri-local"))
 
 
+def test_client_connects_to_the_cos_meguri_database():
+    from app.adapters.firestore_repo import FirestoreRepository
+
+    assert FirestoreRepository("p")._db._database_string.endswith("/databases/cos-meguri")
+
+
 def _uid() -> str:
     """テスト間でドキュメントが衝突しないようにする（エミュレータは共有）。"""
     return uuid.uuid4().hex[:8]

@@ -33,8 +33,10 @@ COL_AUDIT = "audit"
 class FirestoreRepository(RepositoryPort):
     name = "repository:firestore"
 
+    DATABASE = "cos-meguri"
+
     def __init__(self, project: str) -> None:
-        self._db = firestore.Client(project=project)
+        self._db = firestore.Client(project=project, database=self.DATABASE)
 
     async def _run(self, fn, *args):
         return await asyncio.to_thread(fn, *args)
