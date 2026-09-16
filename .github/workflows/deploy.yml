@@ -3,9 +3,8 @@
 # main への push（*.md と docs/ を除く）で、テスト → デプロイ → /health 確認まで走る。
 # deploy ジョブは Variables の CD_ENABLED が "true" のときだけ動く（止めたいときはここを false に）。
 #
-# 設定の手順は DEPLOY.md「パターンC: GitHub Actions（CD）」を参照。
-# 手順は DEPLOY.md のパターンA/Bと同じことを CI から行うだけで、
-# 前提（Firestore・Secret Manager・Firebase Auth の作成）は済んでいる必要がある。
+# 前提（Firestore・Secret Manager・Firebase Auth の作成、Workload Identity 連携）は
+# 済んでいる必要がある。
 
 name: Deploy to Cloud Run
 
@@ -77,7 +76,6 @@ jobs:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
           source: .
-          # 値の意味は DEPLOY.md 手順5の「ポイント」を参照。
           # AUTH_MODE=firebase と REPOSITORY=firestore は落とさないこと
           env_vars: |
             APP_ENV=production
