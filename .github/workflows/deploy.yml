@@ -1,10 +1,9 @@
 # Cloud Run への継続デプロイ（CD）
 #
-# ★ 現在このCDは停止している ★
-#   1. push トリガーをコメントアウトしてある（自動デプロイは起きない）
-#   2. deploy ジョブは Variables の CD_ENABLED が "true" のときだけ動く
+# main への push（*.md と docs/ を除く）で、テスト → デプロイ → /health 確認まで走る。
+# deploy ジョブは Variables の CD_ENABLED が "true" のときだけ動く（止めたいときはここを false に）。
 #
-# 有効化の手順は DEPLOY.md「パターンC: GitHub Actions（CD）」を参照。
+# 設定の手順は DEPLOY.md「パターンC: GitHub Actions（CD）」を参照。
 # 手順は DEPLOY.md のパターンA/Bと同じことを CI から行うだけで、
 # 前提（Firestore・Secret Manager・Firebase Auth の作成）は済んでいる必要がある。
 
@@ -17,12 +16,11 @@ on:
         description: "手動デプロイの理由（実行履歴に残す）"
         required: false
         default: "manual"
-  # --- CD を有効にするときにこのブロックのコメントを外す ---
-  # push:
-  #   branches: [main]
-  #   paths-ignore:
-  #     - "**.md"
-  #     - "docs/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 # 同じブランチのデプロイが重なったら古い方を捨てる。
 # Cloud Run のリビジョンが競合して順序が入れ替わるのを防ぐ。
@@ -101,11 +99,12 @@ jobs:
 
       # 新リビジョンが実際に起動して、意図したプロバイダで立ち上がったかを見る。
       # auth が auth:dev のままなら Firebase 設定が入っていないので失敗させる。
-      - name: /healthz で確認
+      - name: /health で確認
         run: |
           set -euo pipefail
           URL="${{ steps.deploy.outputs.url }}"
-          BODY=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$URL/healthz")
+          # /healthz は Google のフロントエンドが横取りして 404 を返す。/health を叩く
+          BODY=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$URL/health")
           echo "$BODY"
           echo "$BODY" | grep -q '"auth":"auth:firebase"' \
             || { echo "::error::AUTH_MODE が firebase になっていない"; exit 1; }

@@ -982,6 +982,91 @@ select[aria-invalid="true"] {
 
 /* ---- 使い方・預からないもの ---- */
 
+/* ---- 画面の写し（トップ） ----
+   実物と同じ画像。文字は小さくて読めないので、何の画面かは見出しと1行の説明で伝える */
+
+.guide {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  gap: 18px;
+  margin: 4px 0 8px;
+}
+
+/* 一覧。8枚を全部並べると縦に伸びるので、高さを切ってスクロールさせる */
+.thumbs {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 0 0;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  max-height: 520px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.thumb {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 2px 6px;
+  padding: 6px;
+  text-align: left;
+  border-radius: 10px;
+  box-shadow: none;
+  background: var(--paper);
+}
+.thumb:hover { transform: none; box-shadow: none; }
+.thumb[aria-current="true"] { background: var(--hue); color: var(--on); }
+.thumb .no { grid-row: 1 / span 2; align-self: center; font-family: var(--font-mono); font-size: 0.7rem; }
+.thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  object-fit: cover;
+  object-position: top;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--wash);
+}
+.thumb .label { font-size: 0.68rem; letter-spacing: 0; white-space: normal; }
+
+.shot-main { display: grid; gap: 12px; align-content: start; }
+/* 画面の写しは縦の長さがばらばら（プランは長く、ログインは短い）。
+   入れ物の高さを決めて、はみ出した下は切る。切るのは表示だけで、画像そのものは撮ったまま */
+.shot {
+  aspect-ratio: 1120 / 760;
+  overflow: hidden;
+  border: var(--edge);
+  border-radius: var(--r-card);
+  box-shadow: var(--pop);
+  background: var(--paper);
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center; /* 上（看板と見出し）から見せる */
+}
+.shot-nav { display: flex; align-items: center; gap: 12px; }
+.shot-nav button { padding: 6px 14px; font-size: 0.8rem; box-shadow: 3px 3px 0 var(--ink); }
+.counter { font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-2); }
+.shot-caption { margin: 0; display: grid; gap: 3px; }
+.shot-caption b { font-size: 1rem; font-weight: 900; letter-spacing: -0.02em; }
+.shot-caption span { font-size: 0.86rem; line-height: 1.7; color: var(--ink-2); word-break: auto-phrase; }
+
+/* 狭い画面では一覧を横に流す（縦に置くと本文が細くなる） */
+@media (max-width: 640px) {
+  .guide { grid-template-columns: minmax(0, 1fr); }
+  .thumbs {
+    grid-auto-flow: column;
+    grid-auto-columns: 128px;
+    max-height: none;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+}
+
 .howto-list {
   margin: 4px 0 0;
   padding: 0;

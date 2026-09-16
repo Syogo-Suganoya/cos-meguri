@@ -8,6 +8,7 @@
      data-i18n-html="鍵"           中身の HTML（<b> や <br> を含む文。英語の HTML を en.js に持つ）
      data-i18n-placeholder="原文"  placeholder
      data-i18n-aria-label="原文"   aria-label
+     data-i18n-alt="原文"          alt（画像の説明）
 
    言語は端末に控える（ログインしていなくても、トップから英語で見られるように）。
    ログインやゲストの通行証があれば、サーバにも伝えてプランの文面をその言語で組ませる。 */
@@ -60,6 +61,7 @@ export function applyI18n(root = document) {
     root.querySelectorAll("[data-i18n-aria-label]").forEach((el) =>
       el.setAttribute("aria-label", t(el.dataset.i18nAriaLabel))
     );
+    root.querySelectorAll("[data-i18n-alt]").forEach((el) => (el.alt = t(el.dataset.i18nAlt)));
   }
   // 英語の人には、訳し終えるまで本文を隠している（各ページの <head> の小さな script）
   html.classList.remove("i18n-pending");

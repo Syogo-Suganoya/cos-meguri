@@ -114,7 +114,7 @@ services:
 
   # 画面操作イメージの撮影: docker compose up -d api のあと
   #   docker compose --profile shots run --rm shots
-  # 利用者と同じ順に操作して docs/shots/ に書き出す
+  # 利用者と同じ順に操作して web/shots/ に書き出す（トップページと README が同じ画像を使う）
   shots:
     profiles: ["shots"]
     build: docker/shots
@@ -128,3 +128,4 @@ services:
     entrypoint: ["node", "docs/shots.js"]
     volumes:
       - ./docs:/work/docs
+      - ./web:/work/web

@@ -1,5 +1,5 @@
 /**
- * README に載せる画面操作イメージを撮る。
+ * トップページと README に載せる画面操作イメージを撮る。
  *
  *   docker compose up -d api
  *   docker compose --profile shots run --rm shots
@@ -8,14 +8,14 @@
  * ゲストで相談とプランを使い、☆ から登録する流れを撮る。登録は毎回まっさらなメールアドレスなので、
  * エミュレータを空にする必要はない。
  *
- * 出力: docs/shots/*.png
+ * 出力: web/shots/*.png と web/shots/thumbs/*.png（トップページの「画面」と README が同じ画像を指す）
  */
 
 const fs = require("fs");
 const puppeteer = require("puppeteer");
 
 const BASE = process.env.BASE_URL || "http://api:8080";
-const OUT = process.env.OUT_DIR || "/work/docs/shots";
+const OUT = process.env.OUT_DIR || "/work/web/shots";
 // ブラウザ向けのエミュレータ URL は http://localhost:9099 で配られる。
 // このコンテナの localhost にはエミュレータがいないので、compose の名前へ付け替える
 const AUTH_PUBLIC = process.env.AUTH_PUBLIC || "http://localhost:9099";
@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function waitForServer() {
   for (let i = 0; i < 60; i++) {
     try {
-      const res = await fetch(`${BASE}/healthz`);
+      const res = await fetch(`${BASE}/health`);
       if (res.ok) return;
     } catch {
       /* まだ起動していない */
@@ -39,7 +39,7 @@ async function waitForServer() {
 
 async function main() {
   await waitForServer();
-  fs.mkdirSync(OUT, { recursive: true });
+  fs.mkdirSync(`${OUT}/thumbs`, { recursive: true });
 
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
@@ -60,13 +60,19 @@ async function main() {
     return req.continue();
   });
 
-  /** 画面の高さを決めて撮る。ページ全体の長さに合わせたいときは height を省く。 */
+  /** 画面の高さを決めて撮る。ページ全体の長さに合わせたいときは height を省く。
+   *
+   * 大きい1枚と、一覧用の小さい1枚（thumbs/）を撮る。トップページは8枚を一覧で出すので、
+   * 大きい画像をそのまま並べると2MBを超える。倍率を落とした別画像にして軽くする。
+   */
   const shot = async (name, height) => {
     const h = height || (await page.evaluate(() => document.documentElement.scrollHeight));
-    await page.setViewport({ width: WIDTH, height: h, deviceScaleFactor: 2 });
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await sleep(500); // 入場のアニメーション（0.24秒）が終わるのを待つ
-    await page.screenshot({ path: `${OUT}/${name}.png` });
+    for (const [scale, dir] of [[2, OUT], [0.3, `${OUT}/thumbs`]]) {
+      await page.setViewport({ width: WIDTH, height: h, deviceScaleFactor: scale });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await sleep(500); // 入場のアニメーション（0.24秒）が終わるのを待つ
+      await page.screenshot({ path: `${dir}/${name}.png` });
+    }
     console.log(`撮影: ${name}.png`);
   };
 

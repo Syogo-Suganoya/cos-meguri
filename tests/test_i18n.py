@@ -28,7 +28,7 @@ def _english_keys() -> dict[str, str]:
 
 def _html_keys(path: Path) -> set[str]:
     html = path.read_text()
-    return set(re.findall(r'data-i18n(?:-html|-placeholder|-aria-label)?="([^"]+)"', html))
+    return set(re.findall(r'data-i18n(?:-html|-placeholder|-aria-label|-alt)?="([^"]+)"', html))
 
 
 def _t_call_literals(source: str) -> set[str]:
@@ -100,7 +100,9 @@ def test_no_japanese_text_is_left_unmarked_in_html(path):
         r"<(\w+)\b[^>]*data-i18n(?:-html)?=\"[^\"]*\"[^>]*>.*?</\1>", "", html, flags=re.S
     )
     # 属性（aria-label・placeholder）は data-i18n-* を併記していれば訳される
-    html = re.sub(r'\s(?:aria-label|placeholder)="[^"]*"(?=[^>]*data-i18n-(?:aria-label|placeholder)=)', "", html)
+    html = re.sub(
+        r'\s(?:aria-label|placeholder|alt)="[^"]*"(?=[^>]*data-i18n-(?:aria-label|placeholder|alt)=)', "", html
+    )
     html = re.sub(r'\sdata-i18n-[\w-]+="[^"]*"', "", html)
     leftover = [line.strip() for line in html.splitlines() if JAPANESE.search(line)]
     assert not leftover, f"{path.name} に訳の印が無い日本語: {leftover}"

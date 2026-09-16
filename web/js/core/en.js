@@ -52,6 +52,34 @@ export const EN = {
   "home.howto.3":
     "<b>Keep what you like with ☆.</b> Log in to save makeup steps and routes to favourites and revisit them any time on My page. A plan you built before logging in carries over.",
 
+  "画面": "Screens",
+  "画面の一覧": "List of screens",
+  "← 前": "← Back",
+  "次 →": "Next →",
+  "{title}の画面": "The {title} screen",
+  "トップ": "Top",
+  "「使ってみる」はログインなしで相談へ入ります。": "“Try it” takes you into plan setup without logging in.",
+  "プラン（ゲスト）": "Plan (as a guest)",
+  "ログインしなくてもプランは見られます。☆ を押すと、ログインと登録を案内します。":
+    "You can see your plan without logging in. Press ☆ and we point you to logging in or signing up.",
+  "☆ の案内から来ます。ログインする前に組んだプランは、そのまま引き継ぎます。":
+    "You arrive here from the ☆ prompt. A plan you built before logging in carries over.",
+  "ログインせずにマイページを開くと、ここへ送られます。入ったあとは元の画面へ戻します。":
+    "Opening My page without logging in brings you here. Once you're in, we take you back where you were.",
+  "イベント名・日付・目的地・時間と、作品名・キャラ名・出発駅・荷物。押したときに足りない欄は、その欄の真下に出ます。":
+    "Event name, date, destination and times, plus series, character, departure station and luggage. Anything still missing is called out right under that field.",
+  "プラン: メイクの工程": "Plan: makeup steps",
+  "プラン: メイクの工程の画面": "The makeup steps screen",
+  "ベースからウィッグ際まで9工程。工程ごとに、なぜそうするかの根拠も添えます。":
+    "Nine steps from base to wig line, each with the reasoning behind it.",
+  "プラン: 動線": "Plan: route",
+  "プラン: 動線の画面": "The route screen",
+  "行きは開始までに着き、帰りは終了後に出ます。乗換ぶんの荷物の時間を足した実際の所要で出しています。":
+    "You arrive before the event starts and leave after it ends, using travel times that already include the luggage time at each transfer.",
+  "マイページの画面": "The My page screen",
+  "☆ で残したメイクの工程と動線。保存した時点の写しなので、組み直しても消えません。":
+    "The makeup steps and routes you kept with ☆. Each is a copy taken when you saved it, so rebuilding your plan doesn't remove them.",
+
   // ---- 相談
   "ask.lead": "Fill in the fields and press “Build my plan” — we put the day together and take you to your <b>plan</b>.",
   "条件": "Conditions",

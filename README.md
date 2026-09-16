@@ -28,17 +28,20 @@ Cloud Run への載せかたは [DEPLOY.md](DEPLOY.md) を参照。
 
 ### 画面操作イメージ
 
-`docker compose --profile shots run --rm shots` で、利用者と同じ順に操作して撮り直せる（[docs/shots.js](docs/shots.js)）。
+利用者と同じ順に操作した画面。画像を押すと大きく開く。
+撮り直しは `docker compose --profile shots run --rm shots`（[docs/shots.js](docs/shots.js)）。
+画像は [web/shots/](web/shots) にあり、トップページの「画面」も同じものを指している。
 
-| 1. トップ（「使ってみる」はログインなしで相談へ） | 2. 相談（足りない欄の真下に何を入れるかが出る） |
+| | |
 |---|---|
-| ![トップ](docs/shots/01-top.png) | ![相談](docs/shots/02-ask.png) |
-| **3. プラン（ゲスト）**（☆ を押すと、ログインと登録の案内が出る） | **4. アカウントを作る**（☆ の案内から。組んだプランは引き継ぐ） |
-| ![プラン（ゲスト）](docs/shots/03-plan-guest.png) | ![アカウントを作る](docs/shots/04-signup.png) |
-| **5. プラン: メイクの工程**（登録から戻ると、押してあった ☆ が保存されている） | **6. プラン: 動線**（行きは開始までに着き、帰りは終了後に出る） |
-| ![メイクの工程](docs/shots/05-plan-makeup.png) | ![動線](docs/shots/06-plan-route.png) |
-| **7. マイページ**（保存したメイクの工程と動線） | **8. ログイン**（ログインせずにマイページを開くと、ここへ送られる） |
-| ![マイページ](docs/shots/07-me.png) | ![ログイン](docs/shots/08-login.png) |
+| [![トップ](web/shots/thumbs/01-top.png)](web/shots/01-top.png) | **1. トップ** — 「使ってみる」はログインなしで相談へ入る。 |
+| [![相談](web/shots/thumbs/02-ask.png)](web/shots/02-ask.png) | **2. 相談** — 空のまま押すと、足りない欄の真下に何を入れるかが出る。 |
+| [![プラン（ゲスト）](web/shots/thumbs/03-plan-guest.png)](web/shots/03-plan-guest.png) | **3. プラン（ゲスト）** — ☆ を押すと、ログインと登録の案内が出る。 |
+| [![アカウントを作る](web/shots/thumbs/04-signup.png)](web/shots/04-signup.png) | **4. アカウントを作る** — ☆ の案内から来る。組んだプランは引き継ぐ。 |
+| [![プラン: メイクの工程](web/shots/thumbs/05-plan-makeup.png)](web/shots/05-plan-makeup.png) | **5. プラン: メイクの工程** — 登録から戻ると、押してあった ☆ が保存されている。 |
+| [![プラン: 動線](web/shots/thumbs/06-plan-route.png)](web/shots/06-plan-route.png) | **6. プラン: 動線** — 行きは開始までに着き、帰りは終了後に出る。 |
+| [![マイページ](web/shots/thumbs/07-me.png)](web/shots/07-me.png) | **7. マイページ** — 保存したメイクの工程と動線が並ぶ。 |
+| [![ログイン](web/shots/thumbs/08-login.png)](web/shots/08-login.png) | **8. ログイン** — ログインせずにマイページを開くと、ここへ送られる。 |
 
 ## できること
 

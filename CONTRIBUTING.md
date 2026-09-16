@@ -37,7 +37,7 @@ docker compose up -d --build api
 | `docker compose --profile test run --rm test` | ユニットテスト（インメモリ） |
 | `docker compose --profile itest run --rm test-firestore` | Firestore アダプタの結合テスト |
 | `docker compose --profile docs run --rm diagram` | アーキテクチャ図の再生成 |
-| `docker compose --profile shots run --rm shots` | 画面操作イメージの撮影（api を起動しておく。`docs/shots/` に出る） |
+| `docker compose --profile shots run --rm shots` | 画面操作イメージの撮影（api を起動しておく。`web/shots/` に出る。トップページと README が同じ画像を指す） |
 
 ホスト側ポートは Firestore エミュレータが既定 `8210`（`FIRESTORE_PORT`）、認証エミュレータが既定 `9099`（`AUTH_EMULATOR_PORT`）。
 データを消したいときは `docker compose down` でエミュレータごと落とす。
@@ -49,7 +49,7 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 
 外部APIはすべてポート越しに呼び、環境変数1本で mock と live を入れ替える。
 **キーが無ければ live 指定でも mock に落として起動を続ける**（デモ当日にキー1本で全部落ちるのを避ける）。
-いま何が動いているかは `GET /api/providers` と `/healthz` で見える。
+いま何が動いているかは `GET /api/providers` と `/health` で見える。
 
 | 環境変数 | mock（既定） | live |
 |---|---|---|
@@ -59,7 +59,7 @@ APIキーは `.env`（`.env.example` をコピー）から注入する。gitigno
 | `AUTH_MODE` | —（`dev` はテスト専用） | Firebase Authentication（ローカルはエミュレータ） |
 
 変数名は**使う API の名前**にしてある。`VTO` / `TRANSIT` / `LLM` は業界の略語で、
-何が動くのか名前から分からなかったため。`/healthz` の `providers` もキーを同じ名前に
+何が動くのか名前から分からなかったため。`/health` の `providers` もキーを同じ名前に
 揃えてあり、値（`ekispert:mock` / `ekispert:live`）が変数の実効値になる。
 
 > [!WARNING]
@@ -112,13 +112,15 @@ app/
 ├── agents/             設計書 §4 のエージェント構成
 └── api/                HTTP 層
 web/                    PWA（ログインも自作）
-├── index.html          トップ（できること・使い方・ログイン）
+├── index.html          トップ（できること・使い方・画面の写し）
 ├── pages/              ask / login / signup / plan / me の5画面
 ├── js/core/            全ページ共通（api・認証・枠・プラン復元）
-└── js/pages/           画面ごとの初期化。1画面1モジュール
-docs/                   アーキテクチャ図と画面操作イメージ（shots.js・shots/）の生成
+├── js/core/i18n.js     画面の言語（訳は js/core/en.js）
+├── js/pages/           画面ごとの初期化。1画面1モジュール
+└── shots/              画面操作イメージ（docs/shots.js が撮る。トップと README が指す）
+docs/                   アーキテクチャ図の生成と、画面操作イメージの撮影（shots.js）
 docker/                 認証エミュレータと撮影用のイメージ
-tests/                  ユニット100件＋Firestore結合11件
+tests/                  ユニット170件＋Firestore結合12件
 ```
 
 ### フロントの決めごと

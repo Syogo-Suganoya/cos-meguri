@@ -11,7 +11,7 @@
 <!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
      スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
 <script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
-<link rel="stylesheet" href="/static/style.css?v=76">
+<link rel="stylesheet" href="/static/style.css?v=80">
 </head>
 <body class="p-home">
 <!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
@@ -135,6 +135,23 @@
       <li data-i18n-html="home.howto.2"><b>「プラン」で見る。</b>メイクの工程と動線の2つに分かれています。直したくなったら「相談」で1つだけ変えて組み直せます。</li>
       <li data-i18n-html="home.howto.3"><b>気に入ったら ☆ で残す。</b>ログインすると、メイクの工程と動線をお気に入りに保存して、マイページでいつでも見返せます。ログインする前に組んだプランも、そのまま引き継ぎます。</li>
     </ol>
+    <!-- 画面の写し。実物と同じものを docs/shots.js が撮っている（README も同じ画像を指す）。
+         8枚を大きいまま並べるとページが伸びて重いので、一覧はサムネイル（shots/thumbs/）にして、
+         選んだ1枚だけ大きく出す。中身は home.js が描く（説明の文言も持つ） -->
+    <h2 class="section-title" id="screens"><span data-i18n="画面">画面</span><span class="squiggle" aria-hidden="true"><svg viewBox="0 0 120 12" preserveAspectRatio="none"><path d="M2 8 C 18 1, 26 11, 42 6 S 70 1, 86 7 S 110 10, 118 4"/></svg></span></h2>
+    <div class="guide">
+      <ol id="shot-thumbs" class="thumbs" aria-label="画面の一覧" data-i18n-aria-label="画面の一覧"></ol>
+      <div class="shot-main">
+        <div class="shot"><img id="shot-image" alt="" decoding="async"></div>
+        <div class="shot-nav">
+          <button id="shot-prev" class="ghost" data-i18n="← 前">← 前</button>
+          <span id="shot-counter" class="counter"></span>
+          <button id="shot-next" class="ghost" data-i18n="次 →">次 →</button>
+        </div>
+        <p class="shot-caption"><b id="shot-title"></b><span id="shot-detail"></span></p>
+      </div>
+    </div>
+
     <!-- 読み終えた人が上まで戻らなくていいように、入口をもう1つ置く -->
     <div class="hero-cta lower-cta">
       <a class="btn primary" href="/ask" data-i18n="使ってみる">使ってみる</a>
@@ -142,6 +159,6 @@
   </section>
 </main>
 
-<script type="module" src="/static/js/pages/home.js?v=76"></script>
+<script type="module" src="/static/js/pages/home.js?v=80"></script>
 </body>
 </html>

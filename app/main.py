@@ -42,8 +42,11 @@ app.add_middleware(
 app.include_router(router)
 
 
-@app.get("/healthz")
-async def healthz() -> dict:
+# `/healthz` にはしない。Cloud Run の手前の Google のフロントエンドがこのパスを横取りし、
+# アプリに渡さず自分の 404 HTML を返す（`/health` `/readyz` `/nope` はアプリに届く）。
+# 実測で確認済みなので、名前を戻さないこと。
+@app.get("/health")
+async def health() -> dict:
     """稼働確認。設定の取り違えを目視ではなく応答で分かるようにする。
 
     live のつもりが mock に落ちている・認証がエミュレータのまま、といった状態は

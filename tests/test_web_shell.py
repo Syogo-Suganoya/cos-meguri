@@ -100,6 +100,19 @@ def test_first_paint_comes_after_the_const_declarations(js):
     )
 
 
+def test_top_page_gallery_points_at_real_screenshots():
+    """トップの「画面」は home.js が持つ一覧で描く。HTML に無いので、ここで画像の有無を見る。
+
+    撮り直しで名前が変わると、一覧がリンク切れの箱だけになる（押しても何も出ない）。
+    """
+    home = (WEB / "js" / "pages" / "home.js").read_text()
+    names = re.findall(r'\["([\w-]+)", "', home.split("const SHOTS", 1)[1].split("];", 1)[0])
+    assert len(names) >= 4, names
+    for name in names:
+        assert (WEB / "shots" / f"{name}.png").is_file(), f"web/shots/{name}.png がない"
+        assert (WEB / "shots" / "thumbs" / f"{name}.png").is_file(), f"web/shots/thumbs/{name}.png がない"
+
+
 @pytest.mark.parametrize("url,path", PAGES.items())
 def test_every_page_declares_its_icons(client, url, path):
     """印が無いとタブでどれがコスめぐりか分からない。iOS は PNG しか受けない。"""
@@ -137,7 +150,7 @@ def test_service_worker_shell_is_all_reachable(client):
 def test_page_route_does_not_shadow_the_api_or_docs(client):
     assert client.get("/docs").status_code == 200
     assert client.get("/api/events").status_code == 200
-    assert client.get("/healthz").status_code == 200
+    assert client.get("/health").status_code == 200
     assert client.get("/nope").status_code == 404
 
 

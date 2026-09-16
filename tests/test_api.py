@@ -34,8 +34,8 @@ def _plan(session, **overrides) -> dict:
 # ---------------------------------------------------------------- 基本
 
 
-def test_healthz_reports_providers(client):
-    res = client.get("/healthz")
+def test_health_reports_providers(client):
+    res = client.get("/health")
     assert res.status_code == 200
     providers = res.json()["providers"]
     # キーは環境変数と同じ名前、値はその変数の実効値（EKISPERT_MODE=mock で動いている）
