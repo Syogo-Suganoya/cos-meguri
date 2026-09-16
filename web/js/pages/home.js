@@ -109,7 +109,14 @@ function drawThumbs() {
   ).join("");
 }
 
-function show(index) {
+/**
+ * @param {number} index
+ * @param {{ reveal?: boolean }} options `reveal: true` は選んだサムネイルを一覧内で見える位置まで送る。
+ *   これは一覧そのものの中だけの移動のはずが、初回描画でも呼ぶとページ全体がここまで
+ *   スクロールしてしまっていた（一覧は「使い方」よりさらに下で、開いた瞬間は画面外なので、
+ *   ブラウザが「最小の移動で見せる」ためにページごと動かす）。ユーザーが選んだときだけ送る
+ */
+function show(index, { reveal = false } = {}) {
   shown = Math.min(SHOTS.length - 1, Math.max(0, index));
   const [file, title, detail] = SHOTS[shown];
   const image = $("shot-image");
@@ -123,17 +130,16 @@ function show(index) {
   document.querySelectorAll(".thumb").forEach((b) => {
     const on = Number(b.dataset.shot) === shown;
     b.setAttribute("aria-current", String(on));
-    // 一覧は縦に長い。選んだものが外に出たら見える位置まで送る
-    if (on) b.scrollIntoView({ block: "nearest" });
+    if (on && reveal) b.scrollIntoView({ block: "nearest" });
   });
 }
 
 $("shot-thumbs").addEventListener("click", (e) => {
   const button = e.target.closest?.("button.thumb");
-  if (button) show(Number(button.dataset.shot));
+  if (button) show(Number(button.dataset.shot), { reveal: true });
 });
-on("shot-prev", "click", () => show(shown - 1));
-on("shot-next", "click", () => show(shown + 1));
+on("shot-prev", "click", () => show(shown - 1, { reveal: true }));
+on("shot-next", "click", () => show(shown + 1, { reveal: true }));
 
 drawThumbs();
 show(0);
