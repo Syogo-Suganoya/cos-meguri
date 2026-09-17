@@ -5,7 +5,7 @@
 キャラのメイクをどこから始めるか、大荷物でどの経路を使うか。
 ばらばらに調べていたことを、相談の欄に入れた条件から一度に出す。
 
-![技術スタック](docs/architecture.png)
+<img src="docs/architecture.png" alt="技術スタック" width="700">
 
 ## 画面
 
