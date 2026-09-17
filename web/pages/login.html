@@ -11,7 +11,7 @@
 <!-- 英語を選んでいる人には、訳し終えるまで本文を隠す（日本語が一瞬見えないように）。core/i18n.js が外す。
      スクリプトが読めなかったときに白いままにならないよう、2秒で必ず外す -->
 <script>try{if(localStorage.getItem("cos-meguri.lang")==="en"){var d=document.documentElement;d.lang="en";d.classList.add("i18n-pending");setTimeout(function(){d.classList.remove("i18n-pending")},2000)}}catch(e){}</script>
-<link rel="stylesheet" href="/static/style.css?v=81">
+<link rel="stylesheet" href="/static/style.css?v=82">
 </head>
 <body class="p-login">
 <!-- 看板と帯の置き場所。中身は core/shell.js が通信を待たずに描く（先に場所を取らないと、描いた瞬間に本文が飛ぶ） -->
@@ -36,6 +36,6 @@
   </section>
 </main>
 
-<script type="module" src="/static/js/pages/login.js?v=81"></script>
+<script type="module" src="/static/js/pages/login.js?v=82"></script>
 </body>
 </html>

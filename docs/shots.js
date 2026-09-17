@@ -121,52 +121,49 @@ async function main() {
   await page.select("#slot-luggage", "heavy");
   await page.click("#btn-apply");
 
-  // 3. プラン（ゲスト）。組み立てに Gemini と駅すぱあとを呼ぶので時間がかかる。
+  // 3. プラン（ゲスト・メイクの工程）。組み立てに Gemini と駅すぱあとを呼ぶので時間がかかる。
   //    ☆ を押すと、お気に入りはログインすると使えることと、登録・ログインの入口が出る
   await waitForTitle("プラン");
   await page.waitForSelector("#pane-makeup .step", { timeout: 60000 });
   await page.click("#pane-makeup button.fav");
   await page.waitForSelector("#fav-note a[href^='/signup']", { timeout: 20000 });
-  await shot("03-plan-guest", 860);
+  await shot("03-plan-guest-makeup", 860);
+
+  // 4. プラン（ゲスト・動線）。ログインする前に、行き・帰りの動線も見られる
+  await page.click('.tab[data-tab="route"]');
+  await page.waitForSelector("#pane-route .summary", { timeout: 20000 });
+  await page.click('#pane-route button.fav[data-direction="outbound"]');
+  await page.waitForSelector("#fav-note a[href^='/signup']", { timeout: 20000 });
+  await shot("04-plan-guest-route");
+  // 案内のリンクは、最後に押した ☆（動線・行き）をログイン後にそのまま保存する
   await page.click("#fav-note a[href^='/signup']");
 
-  // 4. アカウントを作る（まっさらなアカウントを登録する。組んだプランは引き継ぐ）
+  // 5. アカウントを作る（まっさらなアカウントを登録する。組んだプランは引き継ぐ）
   await waitForTitle("アカウントを作る");
   const email = `shots-${Date.now()}@example.com`;
   const password = "shots-password";
   await type("#fb-email", email);
   await type("#fb-password", password);
   await type("#fb-password-confirm", password);
-  await shot("04-signup", 760);
+  await shot("05-signup", 760);
   await page.click("#btn-submit");
 
-  // 5. プラン（メイクの工程）。登録から戻ると、押してあった ☆ が保存されている
+  // ログイン後は動線（行き）の ☆ が自動で保存されている。メイクの工程は撮影に写さず、
+  // ここでログイン後の本物の ☆ として押し直す（ゲストの ☆ は案内を出すだけで保存はしていない）
   await waitForTitle("プラン");
-  await page.waitForSelector('#pane-makeup button.fav[aria-pressed="true"]', { timeout: 20000 });
-  await shot("05-plan-makeup", 1180);
-
-  // 6. プラン（動線）
-  await page.click('.tab[data-tab="route"]');
-  await page.waitForSelector("#pane-route .summary", { timeout: 20000 });
-  await page.click('#pane-route button.fav[data-direction="outbound"]');
   await page.waitForSelector('#pane-route button.fav[data-direction="outbound"][aria-pressed="true"]', {
     timeout: 20000,
   });
-  await shot("06-plan-route");
+  await page.click('.tab[data-tab="makeup"]');
+  await page.waitForSelector("#pane-makeup button.fav", { timeout: 20000 });
+  await page.click("#pane-makeup button.fav");
+  await page.waitForSelector('#pane-makeup button.fav[aria-pressed="true"]', { timeout: 20000 });
 
-  // 7. マイページ（保存したメイクの工程と動線が並ぶ）
+  // 6. マイページ（保存したメイクの工程と動線が並ぶ）
   await page.goto(`${BASE}/me`, { waitUntil: "networkidle0" });
   await waitForTitle("マイページ");
   await page.waitForSelector("#pane-makeup .fav-item", { timeout: 20000 });
-  await shot("07-me", 760);
-
-  // 8. ログイン（ログアウトしてマイページを開くと、ここへ送られる）
-  await page.click("#btn-logout");
-  await waitForTitle("ぜんぶ");
-  await page.goto(`${BASE}/me`, { waitUntil: "networkidle0" });
-  await waitForTitle("ログイン");
-  await type("#fb-email", email);
-  await shot("08-login", 700);
+  await shot("06-me", 760);
 
   await browser.close();
 }
