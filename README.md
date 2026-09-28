@@ -24,6 +24,8 @@
 
 ### 画面操作イメージ
 
+https://github.com/user-attachments/assets/c23550b7-a0d1-42a9-a4af-c07aab2db5dc
+
 1. **トップ**
 
    [![トップ](web/shots/thumbs/01-top.png)](web/shots/01-top.png)
