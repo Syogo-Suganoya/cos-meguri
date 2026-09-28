@@ -3,5 +3,5 @@
 FROM zenika/alpine-chrome:with-puppeteer
 
 USER root
-# 日本語のフォントが無いと全部豆腐になる
-RUN apk add --no-cache font-noto-cjk
+# 日本語のフォントが無いと全部豆腐になる。ffmpeg と chromium-lang（日付・時刻の欄を日本の書式で出す）はデモ動画（docs/demo.js）に使う
+RUN apk add --no-cache font-noto-cjk ffmpeg chromium-lang

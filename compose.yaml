@@ -129,3 +129,19 @@ services:
     volumes:
       - ./docs:/work/docs
       - ./web:/work/web
+
+  # 提出用のデモ動画: docker compose up -d api のあと
+  #   docker compose --profile shots run --rm demo
+  # shots と同じ流れをゆっくり操作して録画し、docs/demo/cos-meguri-demo.mp4 に書き出す
+  demo:
+    profiles: ["shots"]
+    build: docker/shots
+    user: root
+    working_dir: /work
+    environment:
+      BASE_URL: http://api:8080
+      NODE_PATH: /usr/src/app/node_modules
+      TZ: Asia/Tokyo
+    entrypoint: ["node", "docs/demo.js"]
+    volumes:
+      - ./docs:/work/docs
